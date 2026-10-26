@@ -92,6 +92,11 @@ html,body{height:100%;margin:0;overflow:hidden;background:#dbe8f5;color:var(--fg
 #ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(12,22,36,.28);padding:16px;overflow:auto}
 .card{background:var(--glass-strong);border:1px solid var(--hair);border-radius:14px;max-width:520px;width:100%;padding:22px 22px 20px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:14px;max-height:100%;overflow:auto;box-sizing:border-box}
 .card h1{margin:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.head{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;flex-wrap:wrap}
+.gh{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding:5px 11px 5px 9px;border:1px solid var(--hair);border-radius:999px;color:var(--fg);font-size:12.5px;font-weight:600;text-decoration:none;background:rgba(255,255,255,.06);transition:border-color .15s,background .15s}
+.gh i{font-style:normal;color:var(--accent)}
+.gh:hover,.gh:focus-visible{border-color:var(--accent);background:rgba(255,122,26,.12)}
+.gh:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .card h1 b{font-size:34px;font-weight:800;letter-spacing:.08em}
 .card h1 span{font-family:var(--f-display);font-weight:600;font-size:18px;letter-spacing:.22em;color:var(--muted)}
 .card p{margin:0;font-size:14px;line-height:1.6;color:#d7e1ec;max-width:60ch}

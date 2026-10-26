@@ -103,6 +103,7 @@ test('高立刃刻滑姿态：前刃上身直立反弓、后膝跪雪、双臂�
     } else {
       assert.ok(low.hdR < 0.3, `后刃后手离雪面 ${low.hdR.toFixed(2)} m`);
       assert.ok(low.knF > low.knR + 0.2, `后刃前膝 ${low.knF.toFixed(2)} 应明显高于后膝 ${low.knR.toFixed(2)}`);
+      assert.ok(P.knR.position.x > -0.1, `后刃后膝应向前扣成八字，不能往板尾方向打开（局部 x = ${P.knR.position.x.toFixed(2)}）`);
     }
   }
   assert.ok(seen.toe && seen.heel, '前刃、后刃没都做到');

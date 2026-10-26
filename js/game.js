@@ -436,10 +436,10 @@ function ik(a,b,l1,l2,hint,mid,end){
   mid.copy(a).addScaledVector(_d,x).addScaledVector(_p,h);
 }
 const pv={hip:new V3(),hF:new V3(),hR:new V3(),aF:new V3(.26,.15,0),aR:new V3(-.26,.15,0),kF:new V3(),kR:new V3(),eF:new V3(),eR:new V3(),dir:new V3(),neck:new V3(),shC:new V3(),sF:new V3(),sR:new V3(),tF:new V3(),tR:new V3(),elF:new V3(),elR:new V3(),hnF:new V3(),hnR:new V3(),hint:new V3(),ax:new V3(),tmp:new V3()};
-// 高立刃刻滑姿态（板局部坐标）：前刃髋压低顶向弯内、上身直立反弓，前膝向前、后膝跪雪，双臂张开（前手探雪、后手髋高向后）；后刃坐向脚跟侧、前膝顶起、后手撑雪、上身转向行进方向
+// 高立刃刻滑姿态（板局部坐标）：前刃髋压低顶向弯内、上身直立反弓，前膝向前、后膝跪雪，双臂张开（前手探雪、后手髋高向后）；后刃坐向脚跟侧、前膝顶起、后膝向前扣（八字）、后手撑雪、上身转向行进方向
 const DEEP={
   toe:{hip:[-.08,.68,.22],hF:[.8,1,.3],hR:[-.3,.6,.75],dir:[.08,.75,-.66],tF:[.62,.72,.38],tR:[-.62,.95,-.1]},
-  heel:{hip:[0,.5,-.2],hF:[.2,.8,1],hR:[-.6,-.6,.3],dir:[.2,1,.25],tR:[-.32,.54,-.6]}
+  heel:{hip:[0,.5,-.2],hF:[.2,.8,1],hR:[.6,-.4,.4],dir:[.2,1,.25],tR:[-.32,.54,-.6]}
 };
 const mixTo=(v,a,k)=>v.set(v.x+(a[0]-v.x)*k,v.y+(a[1]-v.y)*k,v.z+(a[2]-v.z)*k);
 function poseRider(o){

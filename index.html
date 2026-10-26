@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0c1624">
-<meta name="description" content="刃线 Edgeline：单板滑雪物理模拟网页游戏，立刃刻滑、推坡、平花、Ollie/Nollie 转体与抓板。">
+<meta name="description" content="刃线 Edgeline：单板滑雪物理模拟网页游戏。整座雪山四条雪道：粉雪大白坡、蘑菇道与陡坡、刻滑大道、带大跳台的公园。">
 <title>刃线 Edgeline</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,6 +23,10 @@
     <div class="edge-bar"><i id="edgeHeel"></i><i id="edgeToe"></i><em></em></div>
   </div>
   <div class="row slope"><i id="piste" class="piste"></i><span id="slope">—</span></div>
+  <div class="where">
+    <div class="row"><i id="pisteDot" class="piste"></i><b id="pisteName">山顶主干道</b></div>
+    <div class="row"><span id="zone" class="chip ghost">—</span><span id="alt" class="sub">海拔 —</span></div>
+  </div>
 </div>
 
 <div class="panel tr">
@@ -30,10 +34,12 @@
   <div class="score" id="score">0</div>
   <div class="sub" id="best">最佳 0</div>
   <div class="prog"><i id="prog"></i></div>
-  <div class="sub" id="dist">0 / 1500 m</div>
-  <button id="helpBtn" type="button">操作说明</button>
+  <div class="sub" id="dist">距山脚 3600 m</div>
+  <canvas id="map" aria-label="雪山小地图"></canvas>
+  <div class="row btns"><button id="helpBtn" type="button">操作说明</button><button id="muteBtn" type="button" aria-pressed="false">声音 开</button></div>
 </div>
 
+<div id="banner"><b id="bnName"></b><span id="bnTip"></span></div>
 <div id="trick"><b id="tName"></b><span id="tPts"></span><small id="tSub"></small></div>
 <div id="charge"><i></i></div>
 
@@ -44,6 +50,7 @@
   <span><kbd>Shift</kbd>推坡</span>
   <span><kbd>J</kbd>抓板</span>
   <span><kbd>R</kbd>复位</span>
+  <span><kbd>M</kbd>静音</span>
 </div>
 
 <div id="touch" class="touch-only">
@@ -58,14 +65,22 @@
 <div id="ov">
   <div class="card" id="cardStart">
     <h1><b>刃线</b><span>EDGELINE</span></h1>
-    <p>一条 1500 米的压雪道，沿途 7 个跳台。立刃刻滑、推坡、平花和 Ollie / Nollie 转体都由同一套雪板物理算出来：立刃角决定抓地和转弯半径，刃放错边会吃刃摔倒。</p>
+    <p>从海拔 2700 米的山顶出发，500 米处分成四条雪道，最后都在山脚汇合。立刃刻滑、推坡、平花和 Ollie / Nollie 转体都由同一套雪板物理算出来：立刃角决定抓地和转弯半径，刃放错边会吃刃摔倒。</p>
+    <div class="pick" id="pick" role="group" aria-label="出发位置">
+      <button type="button" data-p="-1" class="on"><i style="--c:#ff7a1a"></i><b>山顶出发</b><small>分岔口自己选</small></button>
+      <button type="button" data-p="0"><i style="--c:#e0383e"></i><b>A 粉雪大白坡</b><small>150 m 宽的粉雪碗</small></button>
+      <button type="button" data-p="1"><i style="--c:#16181c"></i><b>B 黑钻蘑菇墙</b><small>蘑菇道 + 37° 陡坡</small></button>
+      <button type="button" data-p="2"><i style="--c:#2f6fe0"></i><b>C 长城刻滑大道</b><small>100 m 宽，适合刻滑</small></button>
+      <button type="button" data-p="3"><i style="--c:#ff7a1a"></i><b>D Edgeline 公园</b><small>小跳台连跳 + 大跳台</small></button>
+    </div>
     <dl class="ctl desk-only">
       <dt>A / D · ← →</dt><dd>往左 / 右立刃转弯。地面上刃角越大弯越紧，空中用来转体</dd>
       <dt>W / S · ↑ ↓</dt><dd>压前端 / 压后端，压住时左右键做平花（butter）</dd>
       <dt>空格</dt><dd>按住蓄力，松开起跳。蓄力时按住 W 是 Nollie，按住左右键是预拧</dd>
       <dt>Shift</dt><dd>推坡：板横过来用上坡那条刃刹车</dd>
       <dt>J</dt><dd>空中抓板（配合 W / S 换抓法），落地前要松开</dd>
-      <dt>R</dt><dd>回到雪道中间</dd>
+      <dt>R</dt><dd>回到最近雪道的中间</dd>
+      <dt>M</dt><dd>静音 / 取消静音</dd>
     </dl>
     <dl class="ctl touch-only">
       <dt>左摇杆</dt><dd>左右：立刃转弯，空中转体；上下：压前 / 压后，压住再左右拨是平花</dd>
@@ -73,7 +88,8 @@
       <dt>推坡</dt><dd>按住，板横过来刹车</dd>
       <dt>抓板</dt><dd>空中按住抓板，落地前松开</dd>
     </dl>
-    <div class="tip"><b>Nollie 360：</b>先把摇杆往上推（压前端）并按住起跳蓄力，同时往一侧拨，松开起跳后继续往同一侧拨，转满一圈时回正落地。平地也能转出来，跳台上能到 540。</div>
+    <div class="tip"><b>粉雪</b>里重心压后（S / 摇杆往下）板头才浮得起来，压板头会扎进雪里。<b>大跳台</b>建议 50–75 km/h 起跳，太快会落到平地上摔。<b>Nollie 360：</b>压前端并按住起跳蓄力，同时往一侧拨，松开后继续往同一侧拨，转满一圈时回正落地。</div>
+    <div class="opts"><label><input type="checkbox" id="optMusic" checked> 背景音乐</label><label><input type="checkbox" id="optSfx" checked> 音效</label></div>
     <button class="go" id="goBtn" type="button">开始滑行</button>
   </div>
   <div class="card" id="cardEnd" hidden>
@@ -89,6 +105,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

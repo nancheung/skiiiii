@@ -2,40 +2,11 @@
 // 运行：npm test
 const test = require('node:test');
 const assert = require('node:assert');
-const fs = require('fs');
-const path = require('path');
-const THREE = require('three');
-
-function boot() {
-  class FakeRenderer {
-    constructor() { this.shadowMap = {}; this.capabilities = { getMaxAnisotropy: () => 1 }; }
-    setPixelRatio() {} setClearColor() {} setSize() {} render() {} getPixelRatio() { return 1; }
-  }
-  THREE.WebGLRenderer = FakeRenderer;
-  const cache = {};
-  const el = () => ({
-    style: { setProperty() {} }, classList: { add() {}, remove() {}, toggle() {} },
-    addEventListener() {}, setPointerCapture() {}, focus() {}, offsetWidth: 1, textContent: '', hidden: false,
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
-    getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }),
-  });
-  Object.assign(global, {
-    THREE, window: global, devicePixelRatio: 1, innerWidth: 800, innerHeight: 600,
-    document: { getElementById: id => cache[id] || (cache[id] = el()), querySelector: el, createElement: el, body: el(), addEventListener() {} },
-    addEventListener() {}, requestAnimationFrame() {}, matchMedia: () => ({ matches: false }),
-    localStorage: { getItem: () => null, setItem() {} },
-  });
-  // eslint-disable-next-line no-eval
-  (0, eval)(fs.readFileSync(path.join(__dirname, '..', 'js', 'game.js'), 'utf8'));
-  return { E: global.__edgeline, popup: () => cache.tName ? cache.tName.textContent : '' };
-}
+const { boot, DT, IDLE, deg } = require('./boot');
 
 const { E, popup } = boot();
 const st = E.st;
-const DT = 1 / 120;
-const IDLE = { steer: 0, steerSm: 0, lean: 0, jump: false, brake: false, grab: false };
 const run = (sec, inp = {}) => { for (let i = 0; i < sec * 120; i++) E.step(DT, { ...IDLE, ...inp }); };
-const deg = r => r * 180 / Math.PI;
 
 test('直滑会加速，速度在合理范围', () => {
   E.placeAt(4); run(4);
@@ -81,8 +52,8 @@ test('平地 Nollie 360 被识别为 Nollie FS/BS 360', () => {
 
 test('跳台起跳，滞空 1–2.5 秒并安全落地', () => {
   const k = E.KICK[0];
-  E.placeAt(k.s - 45);
-  st.p.x = E.center(k.s - 45) + k.u; st.p.y = E.H(st.p.x, st.p.z);
+  E.placeAt(k.s - 45, k.p);
+  st.p.x = E.pisteX(k.p, k.s - 45) + k.u; st.p.y = E.H(st.p.x, st.p.z);
   let i = 0; while (!st.air && i < 20 * 120) { E.step(DT, IDLE); i++; }
   let air = 0; while (st.air && air < 5) { E.step(DT, IDLE); air += DT; }
   assert.ok(air > 1 && air < 2.5, `滞空 ${air.toFixed(2)} s`);

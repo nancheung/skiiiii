@@ -1,6 +1,6 @@
 {
   "name": "edgeline",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "刃线 Edgeline — 单板滑雪物理模拟网页游戏",
   "license": "AGPL-3.0-only",

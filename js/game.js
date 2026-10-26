@@ -436,9 +436,9 @@ function ik(a,b,l1,l2,hint,mid,end){
   mid.copy(a).addScaledVector(_d,x).addScaledVector(_p,h);
 }
 const pv={hip:new V3(),hF:new V3(),hR:new V3(),aF:new V3(.26,.15,0),aR:new V3(-.26,.15,0),kF:new V3(),kR:new V3(),eF:new V3(),eR:new V3(),dir:new V3(),neck:new V3(),shC:new V3(),sF:new V3(),sR:new V3(),tF:new V3(),tR:new V3(),elF:new V3(),elR:new V3(),hnF:new V3(),hnR:new V3(),hint:new V3(),ax:new V3(),tmp:new V3()};
-// 高立刃刻滑姿态（板局部坐标）：前刃跪压向弯内、双手探雪；后刃坐向脚跟侧、前膝顶起、后手撑雪、上身转向行进方向
+// 高立刃刻滑姿态（板局部坐标）：前刃髋压低顶向弯内、上身直立反弓，前膝向前、后膝跪雪，双臂张开（前手探雪、后手髋高向后）；后刃坐向脚跟侧、前膝顶起、后手撑雪、上身转向行进方向
 const DEEP={
-  toe:{hip:[0,.62,.1],hF:[.45,.35,1],hR:[-.1,0,1],dir:[.1,1,-.22],tF:[.45,.63,.55],tR:[0,.58,.5]},
+  toe:{hip:[-.08,.68,.22],hF:[.8,1,.3],hR:[-.3,.6,.75],dir:[.08,.75,-.66],tF:[.62,.72,.38],tR:[-.62,.95,-.1]},
   heel:{hip:[0,.5,-.2],hF:[.2,.8,1],hR:[-.6,-.6,.3],dir:[.2,1,.25],tR:[-.32,.54,-.6]}
 };
 const mixTo=(v,a,k)=>v.set(v.x+(a[0]-v.x)*k,v.y+(a[1]-v.y)*k,v.z+(a[2]-v.z)*k);
@@ -457,7 +457,7 @@ function poseRider(o){
   if(k>0)mixTo(pv.dir,D.dir,k);pv.dir.normalize();
   pv.neck.copy(pv.hip).addScaledVector(pv.dir,.56);
   setLimb(P.torso,pv.hip,pv.neck);P.chest.position.copy(pv.hip).addScaledVector(pv.dir,.42);
-  const tw=o.twist+(dp<0?.6*o.look*k:0);pv.ax.set(Math.cos(tw),0,-Math.sin(tw)); // 后刃高立刃时上身转向行进方向
+  const tw=o.twist+(dp<0?.6:.3)*o.look*k;pv.ax.set(Math.cos(tw),0,-Math.sin(tw)); // 高立刃时上身转向行进方向（后刃转得更多）
   pv.shC.copy(pv.neck).addScaledVector(pv.dir,-.06);
   pv.sF.copy(pv.shC).addScaledVector(pv.ax,.19);pv.sR.copy(pv.shC).addScaledVector(pv.ax,-.19);
   const sp=o.spread;
@@ -468,7 +468,7 @@ function poseRider(o){
   else if(o.grab==='Nose Grab')pv.tF.set(.66,.08,0);
   else if(o.grab==='Tail Grab')pv.tR.set(-.66,.08,0);
   if(k>0){
-    if(dp>0){mixTo(pv.tF,D.tF,k);mixTo(pv.tR,D.tR,k);}                 // 前刃：双手探向弯内的雪面
+    if(dp>0){mixTo(pv.tF,D.tF,k);mixTo(pv.tR,D.tR,k);}                 // 前刃：前手探向雪面，后手在髋部高度向后打开
     else{pv.tmp.copy(pv.kF);pv.tmp.y+=.07;pv.tF.lerp(pv.tmp,k);mixTo(pv.tR,D.tR,k);} // 后刃：前手搭前膝，后手撑雪
   }
   ik(pv.sF,pv.tF,.31,.31,pv.hint.set(.6,-.6,-.4),pv.elF,pv.hnF);
@@ -948,8 +948,8 @@ function updateVisual(dt){
   let tw=st.air?clamp(-st.spin*.07,-.6,.6):(st.charging?-st.windup*.7:0);
   twistV+=(tw-twistV)*Math.min(1,dt*8);
   spreadV+=((st.air&&!st.grabbing?.6:st.mode==='skid'?.35:0)-spreadV)*Math.min(1,dt*6);
-  // 高立刃刻滑：刃角 30°→48° 之间逐渐换成前刃 / 后刃的低姿态（要有速度才压得下去）
-  const dT=!st.air&&!st.crashed&&st.mode==='carve'?Math.sign(st.edge)*smooth(30*DEG,48*DEG,Math.abs(st.edge))*smooth(6,10,sp):0;
+  // 高立刃刻滑：刃角 30°→48° 之间逐渐换成前刃 / 后刃的高立刃姿态（板立起来了身体就要跟着换，几乎停下时才不换）
+  const dT=!st.air&&!st.crashed&&st.mode==='carve'?Math.sign(st.edge)*smooth(30*DEG,48*DEG,Math.abs(st.edge))*smooth(2,5,sp):0;
   deepV+=(dT-deepV)*Math.min(1,dt*6);
   poseRider({crouch:crouchV,lean:st.press,twist:twistV,spread:spreadV,grab:st.air&&st.grabbing?(st.grabName||grabNameFor(lastInp)):null,look:st.fwd,deep:deepV});
   // 镜头

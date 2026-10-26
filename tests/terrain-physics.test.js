@@ -77,10 +77,11 @@ test('刻滑大道：左右交替大刃角刻滑 12 秒不摔，打出高立刃�
   assert.ok(E.surfaceAt(st.p.x, st.p.z).k === 2, '刻滑时滑出了刻滑大道');
 });
 
-test('高立刃刻滑姿态：前刃跪压、双手探雪；后刃坐向脚跟侧、前膝顶起、后手撑雪；都不穿进雪里', () => {
+test('高立刃刻滑姿态：前刃上身直立反弓、后膝跪雪、双臂张开；后刃坐向脚跟侧、前膝顶起、后手撑雪；都不穿进雪里', () => {
   const THREE = require('three'), W = new THREE.Vector3(), P = E.rig.P;
   const above = o => { o.getWorldPosition(W); return W.y - E.H(W.x, W.z); };
-  const pose = () => { E.rig.frame.updateMatrixWorld(true); const r = {}; for (const k of ['hip', 'knF', 'knR', 'hdF', 'hdR', 'chest', 'head', 'elF', 'elR']) r[k] = above(P[k]); return r; };
+  const pose = () => { E.rig.frame.updateMatrixWorld(true); const r = {}; for (const k of ['hip', 'knF', 'knR', 'hdF', 'hdR', 'chest', 'head', 'elF', 'elR']) r[k] = above(P[k]);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(); P.hdF.getWorldPosition(a); P.hdR.getWorldPosition(b); r.spread = a.distanceTo(b); return r; };
   const seen = {};
   for (const s of [1, -1]) {
     reset(1000, 2);
@@ -94,8 +95,11 @@ test('高立刃刻滑姿态：前刃跪压、双手探雪；后刃坐向脚跟�
     for (const [k, v] of Object.entries(low)) assert.ok(v > -0.08, `${side} ${k} 穿进雪里 ${v.toFixed(2)} m`);
     assert.ok(low.hip < base.hip - 0.3, `${side} 髋没压低：${base.hip.toFixed(2)} → ${low.hip.toFixed(2)}`);
     if (side === 'toe') {
-      assert.ok(Math.min(low.hdF, low.hdR) < 0.3, `前刃手离雪面 ${Math.min(low.hdF, low.hdR).toFixed(2)} m`);
-      assert.ok(low.knR < 0.3, `前刃后膝离雪面 ${low.knR.toFixed(2)} m`);
+      assert.ok(low.knR < 0.15, `前刃后膝要跪到雪面，离雪面 ${low.knR.toFixed(2)} m`);
+      assert.ok(low.knF > low.knR + 0.2, `前刃前膝 ${low.knF.toFixed(2)} 应高于跪雪的后膝 ${low.knR.toFixed(2)}`);
+      assert.ok(low.head > 1 && low.head - low.hip > 0.7, `前刃上身要直立：髋 ${low.hip.toFixed(2)}，头 ${low.head.toFixed(2)}`);
+      assert.ok(low.spread > 1, `前刃双臂要张开，两手相距 ${low.spread.toFixed(2)} m`);
+      assert.ok(Math.min(low.hdF, low.hdR) < 0.5, `前刃要有一只手探向雪面，最低的手离雪面 ${Math.min(low.hdF, low.hdR).toFixed(2)} m`);
     } else {
       assert.ok(low.hdR < 0.3, `后刃后手离雪面 ${low.hdR.toFixed(2)} m`);
       assert.ok(low.knF > low.knR + 0.2, `后刃前膝 ${low.knF.toFixed(2)} 应明显高于后膝 ${low.knR.toFixed(2)}`);

@@ -436,10 +436,10 @@ function ik(a,b,l1,l2,hint,mid,end){
   mid.copy(a).addScaledVector(_d,x).addScaledVector(_p,h);
 }
 const pv={hip:new V3(),hF:new V3(),hR:new V3(),aF:new V3(.26,.15,0),aR:new V3(-.26,.15,0),kF:new V3(),kR:new V3(),eF:new V3(),eR:new V3(),dir:new V3(),neck:new V3(),shC:new V3(),sF:new V3(),sR:new V3(),tF:new V3(),tR:new V3(),elF:new V3(),elR:new V3(),hnF:new V3(),hnR:new V3(),hint:new V3(),ax:new V3(),tmp:new V3()};
-// 高立刃刻滑姿态（板局部坐标）：前刃髋压低顶向弯内、上身直立反弓，前膝向前、后膝跪雪，双臂张开（前手探雪、后手髋高向后）；后刃坐向脚跟侧、前膝顶起、后膝向前扣（八字）、后手撑雪、上身转向行进方向
+// 高立刃刻滑姿态（板局部坐标）：前刃髋压低顶向弯内、上身直立反弓，前膝向前、后膝跪雪，双臂张开（前手探雪、后手髋高向后）；后刃臀部坐到后脚上方、前腿接近打直、后膝向前扣（八字），上身向前压、转向行进方向，前手探雪、后手在前脚上方
 const DEEP={
-  toe:{hip:[-.08,.68,.22],hF:[.8,1,.3],hR:[-.3,.6,.75],dir:[.08,.75,-.66],tF:[.62,.72,.38],tR:[-.62,.95,-.1]},
-  heel:{hip:[0,.5,-.2],hF:[.2,.8,1],hR:[.6,-.4,.4],dir:[.2,1,.25],tR:[-.32,.54,-.6]}
+  toe:{hip:[-.08,.68,.22],hF:[.8,1,.3],hR:[-.3,.6,.75],dir:[.08,.75,-.66],tF:[.62,.72,.38],tR:[-.62,.95,-.1],tw:.3},
+  heel:{hip:[-.4,.7,-.21],hF:[.3,.4,1],hR:[.6,-.5,.3],dir:[.7,1,.55],tF:[.2,.25,-.48],tR:[.28,.6,.22],tw:.8}
 };
 const mixTo=(v,a,k)=>v.set(v.x+(a[0]-v.x)*k,v.y+(a[1]-v.y)*k,v.z+(a[2]-v.z)*k);
 function poseRider(o){
@@ -457,7 +457,7 @@ function poseRider(o){
   if(k>0)mixTo(pv.dir,D.dir,k);pv.dir.normalize();
   pv.neck.copy(pv.hip).addScaledVector(pv.dir,.56);
   setLimb(P.torso,pv.hip,pv.neck);P.chest.position.copy(pv.hip).addScaledVector(pv.dir,.42);
-  const tw=o.twist+(dp<0?.6:.3)*o.look*k;pv.ax.set(Math.cos(tw),0,-Math.sin(tw)); // 高立刃时上身转向行进方向（后刃转得更多）
+  const tw=o.twist+D.tw*o.look*k;pv.ax.set(Math.cos(tw),0,-Math.sin(tw)); // 高立刃时上身转向行进方向（后刃转得更多）
   pv.shC.copy(pv.neck).addScaledVector(pv.dir,-.06);
   pv.sF.copy(pv.shC).addScaledVector(pv.ax,.19);pv.sR.copy(pv.shC).addScaledVector(pv.ax,-.19);
   const sp=o.spread;
@@ -469,7 +469,7 @@ function poseRider(o){
   else if(o.grab==='Tail Grab')pv.tR.set(-.66,.08,0);
   if(k>0){
     if(dp>0){mixTo(pv.tF,D.tF,k);mixTo(pv.tR,D.tR,k);}                 // 前刃：前手探向雪面，后手在髋部高度向后打开
-    else{pv.tmp.copy(pv.kF);pv.tmp.y+=.07;pv.tF.lerp(pv.tmp,k);mixTo(pv.tR,D.tR,k);} // 后刃：前手搭前膝，后手撑雪
+    else{mixTo(pv.tF,D.tF,k);mixTo(pv.tR,D.tR,k);}                     // 后刃：前手探雪，后手横过身体放到前脚上方
   }
   ik(pv.sF,pv.tF,.31,.31,pv.hint.set(.6,-.6,-.4),pv.elF,pv.hnF);
   ik(pv.sR,pv.tR,.31,.31,pv.hint.set(-.6,-.6,-.4),pv.elR,pv.hnR);

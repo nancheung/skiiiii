@@ -513,11 +513,14 @@ const spray=(function(){
 
 /* ================= 物理状态 ================= */
 const EMAX=52*DEG, RSC=7.6, DRAG=0.0036;
+// 卡刃与自动守刃：侧滑角（板和行进方向的夹角）超过 GUARD_SLIP 就自动守住上坡刃，超过 SIDE_SLIP 算横着滑（推坡）；
+// 真卡刃要同时满足滑动方向那侧的刃角 > CATCH_E、侧滑速度 > CATCH_V、侧滑角 > CATCH_SLIP；横着落地看侧向速度 LAND_LAT
+const GUARD_SLIP=12*DEG, GUARD_OFF=8*DEG, GUARD_V=1.5, SIDE_SLIP=45*DEG, CATCH_E=20*DEG, CATCH_V=4.5, CATCH_SLIP=25*DEG, LAND_LAT=6;
 const PW_MU=.06, PW_DRAG=.008, PW_FLOAT=.6, PW_LAND=3.5; // 粉雪：额外滑动阻力、速度平方阻力、压后时阻力倍率、落地缓冲
 const st={p:new V3(),v:new V3(),yaw:Math.PI,edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,take:null,charging:false,charge:0,windup:0,noseLoad:false,
   grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,butterSide:0,butterFwd:1,deepT:0,crashed:false,crashT:0,crashRoll:0,crashSide:1,
   mode:'flat',vf:0,vl:0,speed:0,fwd:1,grip:false,butter:false,nVis:new V3(0,1,0),s:0,time:0,runTime:0,done:false,
-  piste:2,zone:'top',zoneKey:'top',zoneHold:0,pw:0,noseT:0,stuckT:0,lastImpact:0,visited:new Set()};
+  piste:2,zone:'top',zoneKey:'top',zoneHold:0,pw:0,noseT:0,stuckT:0,lastImpact:0,guard:false,visited:new Set()};
 const N0=new V3(),N1=new V3(),F0=new V3(),T0=new V3(),U0=new V3(),LEFT=new V3(),GT=new V3(),TIP=new V3(),VT=new V3();
 const score={total:0,best:0,combo:0,lastT:-99};
 try{score.best=+(localStorage.getItem('edgeline-best')||0);}catch(e){}
@@ -533,7 +536,7 @@ function placeAt(s,p){
   for(const k of KICK){if(k.p===p&&s>k.s-k.ramp-3&&s<k.s+k.land+1)s=k.s+k.land+2;}
   const x=laneAt(p,s),z=-s;st.p.set(x,H(x,z),z);st.v.set(0,0,0);
   st.yaw=Math.atan2(laneD(p,s),-1);st.s=s;
-  Object.assign(st,{edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,charging:false,charge:0,windup:0,grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,deepT:0,crashed:false,crashT:0,crashRoll:0,mode:'flat',piste:p,noseT:0,stuckT:0});
+  Object.assign(st,{edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,charging:false,charge:0,windup:0,grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,deepT:0,crashed:false,crashT:0,crashRoll:0,mode:'flat',piste:p,noseT:0,stuckT:0,guard:false});
   normalAt(st.p.x,st.p.z,st.nVis);trail.breakStroke();
 }
 function crash(reason){
@@ -610,8 +613,14 @@ function groundStep(dt,inp){
     st.noseLoad=inp.lean>.35;
   }
 
+  // 自动守刃（带滞回）：板和行进方向差得多时，骑手会本能地守住上坡刃（滑动方向的反侧），不会把下坡刃压下去
+  const slip=Math.atan2(Math.abs(vl0),Math.abs(vf0)+.05); // 侧滑角 0–90°，正脚反脚都算
+  const up=-Math.sign(vl0);
+  if(!st.guard){if(slip>GUARD_SLIP&&Math.abs(vl0)>GUARD_V)st.guard=true;}
+  else if(slip<GUARD_OFF||Math.abs(vl0)<.6)st.guard=false;
+
   // 目标立刃角与偏航
-  let eT=0,yawRate=0;
+  let eT=0,yawRate=0,sideSlip=false;
   if(inp.brake){
     const au=Math.atan2(U0.x,U0.z);
     const c1=wrapPi(au+Math.PI/2-st.yaw),c2=wrapPi(au-Math.PI/2-st.yaw);
@@ -623,23 +632,27 @@ function groundStep(dt,inp){
     yawRate=st.charging?0:inp.steer*5.2; // 蓄力时左右拨只预拧上身，板不转
   }else{
     eT=inp.steerSm*sideSign*EMAX;
+    if(st.guard&&!(Math.sign(eT)===up&&Math.abs(eT)>4*DEG)){ // 想立的是下坡刃或者放平：改成上坡刃
+      if(slip<=SIDE_SLIP)eT=up*Math.max(Math.abs(eT),30*DEG);                            // 角度差一点：顺势用上坡刃刻过去
+      else{eT=up*clamp(8+2.5*Math.abs(vl0),8,24)*DEG;sideSlip=true;}                   // 横着滑：上坡刃推坡
+    }
   }
   st.edge+=(eT-st.edge)*Math.min(1,dt*7);
   const absE=Math.abs(st.edge);
 
-  const slip=Math.atan2(Math.abs(vl0),Math.abs(vf0)+.05);
-  const correctSide=Math.abs(vl0)<.8||Math.sign(st.edge)===-Math.sign(vl0);
-  const grip=!butter&&!inp.brake&&absE>9*DEG&&slip<(7*DEG+absE*.4)&&correctSide;
+  // 上坡刃在侧滑角不太大时就能咬住；下坡刃只有板和速度几乎对齐时才咬得住（正常换刃起弯）
+  const correctSide=Math.abs(vl0)<.8||Math.sign(st.edge)===up||slip<GUARD_SLIP;
+  const grip=!butter&&!inp.brake&&!sideSlip&&absE>9*DEG&&slip<(10*DEG+absE*.6)&&correctSide;
   st.grip=grip;
   if(grip){
     // 转弯半径：侧切半径 × cos(立刃角)，并受立刃角能承受的向心加速度限制；粉雪里板会漂，弯更大
     const R=Math.max(RSC*Math.cos(absE)*(1+.5*pw),(sp*sp)/(G*Math.tan(absE)*1.1));
     yawRate+=-Math.sign(st.edge)*vf0/R*smooth(9*DEG,16*DEG,absE);
   }else if(!inp.brake&&!butter){
-    yawRate+=inp.steer*fwd*2.4*(1-.6*smooth(2,14,sp));
+    yawRate+=inp.steer*fwd*2.4*(1-.6*smooth(2,14,sp))*(st.guard&&slip<=SIDE_SLIP&&Math.sign(st.edge)===up?.25:1); // 角度差一点、正在顺势立上坡刃时少拧板，让刃先咬住
     if(sp>2.5){ // 板自然回正到行进方向（正脚或反脚）
       const au=Math.atan2(U0.x,U0.z);const d1=wrapPi(au-st.yaw),d2=wrapPi(au+Math.PI-st.yaw);const d=Math.abs(d1)<Math.abs(d2)?d1:d2;
-      yawRate+=d*2.6*(1-Math.abs(inp.steer)*.7);
+      yawRate+=d*2.6*(1-Math.abs(inp.steer)*.7)*(sideSlip?0:1); // 横着推坡时板不会自己转回来，松手就一直推坡到停
     }
   }
   if(sp<3&&!butter&&!inp.brake)yawRate+=inp.steer*fwd*1.2;
@@ -656,14 +669,14 @@ function groundStep(dt,inp){
   GT.set(0,-G,0).addScaledVector(n,G*n.y);st.v.addScaledVector(GT,dt);
   let vf=st.v.dot(F0),vl=st.v.dot(T0);const vn=st.v.dot(n),gn=G*n.y;
 
-  // 吃刃：下坡那条刃（滑动方向一侧）被压进雪里
-  if(!butter&&absE>14*DEG&&Math.sign(st.edge)===Math.sign(vl)&&Math.abs(vl)>3.2){crash('吃刃：立的是下坡那条刃');return;}
+  // 卡刃：横滑得很快，而滑动方向那一侧的刃（下坡刃）已经大角度压进雪里
+  if(!butter&&absE>CATCH_E&&Math.sign(st.edge)===Math.sign(vl)&&Math.abs(vl)>CATCH_V&&slip>CATCH_SLIP){crash('卡刃：横滑时下坡刃压进了雪里');return;}
 
   if(grip){
     const spd=Math.hypot(vf,vl);vl*=Math.exp(-28*dt);vf=(vf>=0?1:-1)*Math.sqrt(Math.max(0,spd*spd-vl*vl));
     st.mode='carve';
   }else{
-    let mu=butter?.24:.05+1.45*Math.sin(absE);if(inp.brake)mu+=.12+.6*smooth(.94,.8,n.y); // 越陡刃咬得越深，陡坡上也能推坡控速
+    let mu=butter?.24:.05+1.45*Math.sin(absE);if(inp.brake)mu+=.12;if(inp.brake||sideSlip)mu+=.6*smooth(.94,.8,n.y); // 越陡刃咬得越深，陡坡上也能推坡控速
     const d=mu*gn*dt;vl=Math.abs(vl)<=d?0:vl-Math.sign(vl)*d;
     st.mode=butter?'butter':(Math.abs(vl)>1.0?'skid':'flat');
   }
@@ -745,7 +758,7 @@ function land(h,inp){
   const pw=surfaceAt(st.p.x,st.p.z).powder;
   if(real){
     if(inp.grab)return crash('落地时还抓着板');
-    if(mis>40*DEG)return crash('落地时板是横着的（差 '+Math.round(mis/DEG)+'°）');
+    if(mis>70*DEG||(mis>40*DEG&&spT*Math.sin(mis)>LAND_LAT))return crash('卡刃：板横着落地（差 '+Math.round(mis/DEG)+'°）'); // 侧向速度小时横着落地只算不稳，落地后自动守刃推坡
     if(vn<-(12.5+PW_LAND*pw))return crash('落地太重，冲击 '+(-vn).toFixed(1)+' m/s');
   }
   const absorb=clamp(-vn*.025,0,.3);st.v.copy(VT).multiplyScalar(1-absorb);

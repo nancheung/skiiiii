@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0c1624">
+<meta name="description" content="刃线 Edgeline：单板滑雪物理模拟网页游戏，立刃刻滑、推坡、平花、Ollie/Nollie 转体与抓板。">
+<title>刃线 Edgeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="game" tabindex="0" aria-label="单板滑雪游戏画面"></canvas>
+
+<div class="panel tl" aria-live="off">
+  <div class="spd"><b id="spd">0</b><span>km/h</span></div>
+  <div class="row"><span id="mode" class="chip">平板</span><span id="stance" class="chip ghost">REG</span></div>
+  <div class="edge">
+    <div class="edge-labels"><span>后刃 HS</span><b id="edgeVal">0°</b><span>前刃 FS</span></div>
+    <div class="edge-bar"><i id="edgeHeel"></i><i id="edgeToe"></i><em></em></div>
+  </div>
+  <div class="row slope"><i id="piste" class="piste"></i><span id="slope">—</span></div>
+</div>
+
+<div class="panel tr">
+  <div class="lbl">本趟得分</div>
+  <div class="score" id="score">0</div>
+  <div class="sub" id="best">最佳 0</div>
+  <div class="prog"><i id="prog"></i></div>
+  <div class="sub" id="dist">0 / 1500 m</div>
+  <button id="helpBtn" type="button">操作说明</button>
+</div>
+
+<div id="trick"><b id="tName"></b><span id="tPts"></span><small id="tSub"></small></div>
+<div id="charge"><i></i></div>
+
+<div class="keys desk-only" id="keys">
+  <span><kbd>A D</kbd>立刃 / 转体</span>
+  <span><kbd>W S</kbd>压前 / 压后</span>
+  <span><kbd>Space</kbd>蓄力起跳</span>
+  <span><kbd>Shift</kbd>推坡</span>
+  <span><kbd>J</kbd>抓板</span>
+  <span><kbd>R</kbd>复位</span>
+</div>
+
+<div id="touch" class="touch-only">
+  <div id="stick"><div id="knob"></div><span class="tag t-up">压前</span><span class="tag t-dn">压后</span><span class="tag t-l">左</span><span class="tag t-r">右</span></div>
+  <div id="btns">
+    <button class="tb" id="bJump" type="button">起跳</button>
+    <button class="tb" id="bBrake" type="button">推坡</button>
+    <button class="tb" id="bGrab" type="button">抓板</button>
+  </div>
+</div>
+
+<div id="ov">
+  <div class="card" id="cardStart">
+    <h1><b>刃线</b><span>EDGELINE</span></h1>
+    <p>一条 1500 米的压雪道，沿途 7 个跳台。立刃刻滑、推坡、平花和 Ollie / Nollie 转体都由同一套雪板物理算出来：立刃角决定抓地和转弯半径，刃放错边会吃刃摔倒。</p>
+    <dl class="ctl desk-only">
+      <dt>A / D · ← →</dt><dd>往左 / 右立刃转弯。地面上刃角越大弯越紧，空中用来转体</dd>
+      <dt>W / S · ↑ ↓</dt><dd>压前端 / 压后端，压住时左右键做平花（butter）</dd>
+      <dt>空格</dt><dd>按住蓄力，松开起跳。蓄力时按住 W 是 Nollie，按住左右键是预拧</dd>
+      <dt>Shift</dt><dd>推坡：板横过来用上坡那条刃刹车</dd>
+      <dt>J</dt><dd>空中抓板（配合 W / S 换抓法），落地前要松开</dd>
+      <dt>R</dt><dd>回到雪道中间</dd>
+    </dl>
+    <dl class="ctl touch-only">
+      <dt>左摇杆</dt><dd>左右：立刃转弯，空中转体；上下：压前 / 压后，压住再左右拨是平花</dd>
+      <dt>起跳</dt><dd>按住蓄力，松开起跳。摇杆推上再松手是 Nollie</dd>
+      <dt>推坡</dt><dd>按住，板横过来刹车</dd>
+      <dt>抓板</dt><dd>空中按住抓板，落地前松开</dd>
+    </dl>
+    <div class="tip"><b>Nollie 360：</b>先把摇杆往上推（压前端）并按住起跳蓄力，同时往一侧拨，松开起跳后继续往同一侧拨，转满一圈时回正落地。平地也能转出来，跳台上能到 540。</div>
+    <button class="go" id="goBtn" type="button">开始滑行</button>
+  </div>
+  <div class="card" id="cardEnd" hidden>
+    <h1><b>到底了</b><span>RUN COMPLETE</span></h1>
+    <div class="stats">
+      <div><b id="endScore">0</b><span>本趟得分</span></div>
+      <div><b id="endBest">0</b><span>最佳</span></div>
+      <div><b id="endTime">0:00</b><span>用时</span></div>
+    </div>
+    <p id="endNote"></p>
+    <button class="go" id="againBtn" type="button">再滑一趟</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

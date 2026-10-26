@@ -77,48 +77,6 @@ test('刻滑大道：左右交替大刃角刻滑 12 秒不摔，打出高立刃�
   assert.ok(E.surfaceAt(st.p.x, st.p.z).k === 2, '刻滑时滑出了刻滑大道');
 });
 
-test('高立刃刻滑姿态：前刃上身直立反弓、后膝跪雪、双臂张开；后刃坐到后脚上方、前腿接近打直、上身前压、前手摸雪、后手在前脚上方；都不穿进雪里', () => {
-  const THREE = require('three'), W = new THREE.Vector3(), P = E.rig.P;
-  const above = o => { o.getWorldPosition(W); return W.y - E.H(W.x, W.z); };
-  const pose = () => { E.rig.frame.updateMatrixWorld(true); const r = {}; for (const k of ['hip', 'knF', 'knR', 'hdF', 'hdR', 'chest', 'head', 'elF', 'elR']) r[k] = above(P[k]);
-    const a = new THREE.Vector3(), b = new THREE.Vector3(); P.hdF.getWorldPosition(a); P.hdR.getWorldPosition(b); r.spread = a.distanceTo(b); return r; };
-  const seen = {};
-  for (const s of [1, -1]) {
-    reset(1000, 2);
-    for (let i = 0; i < 480; i++) { E.step(DT, IDLE); E.updateVisual(DT); }
-    const base = pose();
-    let low = null;
-    for (let i = 0; i < 240; i++) { E.step(DT, { ...IDLE, steer: s, steerSm: s }); E.updateVisual(DT); }
-    assert.equal(st.mode, 'carve'); assert.ok(Math.abs(st.edge) > 45 * Math.PI / 180, '刃角没立起来');
-    low = pose();
-    const side = st.edge > 0 ? 'toe' : 'heel'; seen[side] = true;
-    for (const [k, v] of Object.entries(low)) assert.ok(v > -0.08, `${side} ${k} 穿进雪里 ${v.toFixed(2)} m`);
-    assert.ok(low.hip < base.hip - 0.3, `${side} 髋没压低：${base.hip.toFixed(2)} → ${low.hip.toFixed(2)}`);
-    if (side === 'toe') {
-      assert.ok(low.knR < 0.15, `前刃后膝要跪到雪面，离雪面 ${low.knR.toFixed(2)} m`);
-      assert.ok(low.knF > low.knR + 0.2, `前刃前膝 ${low.knF.toFixed(2)} 应高于跪雪的后膝 ${low.knR.toFixed(2)}`);
-      assert.ok(low.head > 1 && low.head - low.hip > 0.7, `前刃上身要直立：髋 ${low.hip.toFixed(2)}，头 ${low.head.toFixed(2)}`);
-      assert.ok(low.spread > 1, `前刃双臂要张开，两手相距 ${low.spread.toFixed(2)} m`);
-      assert.ok(Math.min(low.hdF, low.hdR) < 0.5, `前刃要有一只手探向雪面，最低的手离雪面 ${Math.min(low.hdF, low.hdR).toFixed(2)} m`);
-    } else {
-      assert.ok(low.hdF < 0.3, `后刃前手要摸到雪，离雪面 ${low.hdF.toFixed(2)} m`);
-      assert.ok(P.hdR.position.x > 0.15, `后刃后手要在前脚上方（局部 x = ${P.hdR.position.x.toFixed(2)}，前脚在 0.26）`);
-      assert.ok(P.chest.position.z > P.hip.position.z, '后刃上身不能后仰，要往前压');
-      const ext = P.hip.position.clone().setX(P.hip.position.x + 0.1).distanceTo(new THREE.Vector3(0.26, 0.15, 0)) / 0.92;
-      assert.ok(ext > 0.85, `后刃前腿要接近打直，伸展 ${(ext * 100).toFixed(0)}%`);
-      assert.ok(P.hip.position.x < -0.2, `后刃重心要坐到后脚上方（髋局部 x = ${P.hip.position.x.toFixed(2)}）`);
-      assert.ok(P.knR.position.x > -0.1, `后刃后膝应向前扣成八字，不能往板尾方向打开（局部 x = ${P.knR.position.x.toFixed(2)}）`);
-    }
-  }
-  assert.ok(seen.toe && seen.heel, '前刃、后刃没都做到');
-  // 低刃角刻滑保持基础姿态
-  reset(1000, 2); for (let i = 0; i < 480; i++) { E.step(DT, IDLE); E.updateVisual(DT); }
-  const b = pose();
-  for (let i = 0; i < 120; i++) { E.step(DT, { ...IDLE, steer: 0.35, steerSm: 0.35 }); E.updateVisual(DT); }
-  assert.ok(Math.abs(st.edge) < 25 * Math.PI / 180);
-  assert.ok(pose().hip > b.hip - 0.15, '低刃角时姿态不该变');
-});
-
 test('大跳台：从助滑区直冲，滞空 2–3.6 秒，安全落地', () => {
   const k = E.BIG;
   for (const start of [k.s - 250, k.s - 100]) {

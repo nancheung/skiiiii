@@ -436,28 +436,20 @@ function ik(a,b,l1,l2,hint,mid,end){
   mid.copy(a).addScaledVector(_d,x).addScaledVector(_p,h);
 }
 const pv={hip:new V3(),hF:new V3(),hR:new V3(),aF:new V3(.26,.15,0),aR:new V3(-.26,.15,0),kF:new V3(),kR:new V3(),eF:new V3(),eR:new V3(),dir:new V3(),neck:new V3(),shC:new V3(),sF:new V3(),sR:new V3(),tF:new V3(),tR:new V3(),elF:new V3(),elR:new V3(),hnF:new V3(),hnR:new V3(),hint:new V3(),ax:new V3(),tmp:new V3()};
-// 高立刃刻滑姿态（板局部坐标）：前刃髋压低顶向弯内、上身直立反弓，前膝向前、后膝跪雪，双臂张开（前手探雪、后手髋高向后）；后刃臀部坐到后脚上方、前腿接近打直、后膝向前扣（八字），上身向前压、转向行进方向，前手探雪、后手在前脚上方
-const DEEP={
-  toe:{hip:[-.08,.68,.22],hF:[.8,1,.3],hR:[-.3,.6,.75],dir:[.08,.75,-.66],tF:[.62,.72,.38],tR:[-.62,.95,-.1],tw:.3},
-  heel:{hip:[-.4,.7,-.21],hF:[.3,.4,1],hR:[.6,-.5,.3],dir:[.7,1,.55],tF:[.2,.25,-.48],tR:[.28,.6,.22],tw:.8}
-};
-const mixTo=(v,a,k)=>v.set(v.x+(a[0]-v.x)*k,v.y+(a[1]-v.y)*k,v.z+(a[2]-v.z)*k);
 function poseRider(o){
-  const P=rig.P,c=o.crouch,dp=o.deep||0,k=Math.abs(dp),D=dp>0?DEEP.toe:DEEP.heel;
+  const P=rig.P,c=o.crouch;
   pv.hip.set(o.lean*.15,.98-.42*c,-.03-.05*c);
   if(o.grab)pv.hip.y=.5;
-  if(k>0)mixTo(pv.hip,D.hip,k);
   pv.hF.copy(pv.hip).x+=.1;pv.hR.copy(pv.hip).x-=.1;
-  ik(pv.hF,pv.aF,.46,.46,mixTo(pv.hint.set(.3,0,1),D.hF,k),pv.kF,pv.eF);
-  ik(pv.hR,pv.aR,.46,.46,mixTo(pv.hint.set(-.3,0,1),D.hR,k),pv.kR,pv.eR);
+  ik(pv.hF,pv.aF,.46,.46,pv.hint.set(.3,0,1),pv.kF,pv.eF);
+  ik(pv.hR,pv.aR,.46,.46,pv.hint.set(-.3,0,1),pv.kR,pv.eR);
   setLimb(P.thF,pv.hF,pv.kF);setLimb(P.shF,pv.kF,pv.aF);setLimb(P.thR,pv.hR,pv.kR);setLimb(P.shR,pv.kR,pv.aR);
   P.knF.position.copy(pv.kF);P.knR.position.copy(pv.kR);P.hip.position.copy(pv.hip);
   let fz=.2+.32*c;if(o.grab==='Indy'||o.grab==='Melon')fz=.9;
-  pv.dir.set(o.lean*.22,1,o.grab==='Melon'?-.2:fz);if(o.grab==='Melon')pv.dir.set(0,.9,.55);
-  if(k>0)mixTo(pv.dir,D.dir,k);pv.dir.normalize();
+  pv.dir.set(o.lean*.22,1,o.grab==='Melon'?-.2:fz);if(o.grab==='Melon')pv.dir.set(0,.9,.55);pv.dir.normalize();
   pv.neck.copy(pv.hip).addScaledVector(pv.dir,.56);
   setLimb(P.torso,pv.hip,pv.neck);P.chest.position.copy(pv.hip).addScaledVector(pv.dir,.42);
-  const tw=o.twist+D.tw*o.look*k;pv.ax.set(Math.cos(tw),0,-Math.sin(tw)); // 高立刃时上身转向行进方向（后刃转得更多）
+  const tw=o.twist;pv.ax.set(Math.cos(tw),0,-Math.sin(tw));
   pv.shC.copy(pv.neck).addScaledVector(pv.dir,-.06);
   pv.sF.copy(pv.shC).addScaledVector(pv.ax,.19);pv.sR.copy(pv.shC).addScaledVector(pv.ax,-.19);
   const sp=o.spread;
@@ -467,10 +459,6 @@ function poseRider(o){
   else if(o.grab==='Melon')pv.tF.set(.04,.07,-.15);
   else if(o.grab==='Nose Grab')pv.tF.set(.66,.08,0);
   else if(o.grab==='Tail Grab')pv.tR.set(-.66,.08,0);
-  if(k>0){
-    if(dp>0){mixTo(pv.tF,D.tF,k);mixTo(pv.tR,D.tR,k);}                 // 前刃：前手探向雪面，后手在髋部高度向后打开
-    else{mixTo(pv.tF,D.tF,k);mixTo(pv.tR,D.tR,k);}                     // 后刃：前手探雪，后手横过身体放到前脚上方
-  }
   ik(pv.sF,pv.tF,.31,.31,pv.hint.set(.6,-.6,-.4),pv.elF,pv.hnF);
   ik(pv.sR,pv.tR,.31,.31,pv.hint.set(-.6,-.6,-.4),pv.elR,pv.hnR);
   setLimb(P.uaF,pv.sF,pv.elF);setLimb(P.faF,pv.elF,pv.hnF);setLimb(P.uaR,pv.sR,pv.elR);setLimb(P.faR,pv.elR,pv.hnR);
@@ -923,7 +911,7 @@ function toggleMute(){SND.unlock();SND.toggleMute();syncMute();}
 
 /* ================= 镜头与可视化 ================= */
 const camDir=new V3(0,0,-1),camTarget=new V3(),lookAt=new V3(),tmpV=new V3(),Fv=new V3(),Tv=new V3(),Mb=new T3.Matrix4(),Qb=new T3.Quaternion(),Qr=new T3.Quaternion();
-let fov=62,crouchV=.25,twistV=0,spreadV=0,sinkV=0,deepV=0;
+let fov=62,crouchV=.25,twistV=0,spreadV=0,sinkV=0;
 const XAX=new V3(1,0,0);
 function updateVisual(dt){
   const sp=st.v.length();
@@ -948,10 +936,7 @@ function updateVisual(dt){
   let tw=st.air?clamp(-st.spin*.07,-.6,.6):(st.charging?-st.windup*.7:0);
   twistV+=(tw-twistV)*Math.min(1,dt*8);
   spreadV+=((st.air&&!st.grabbing?.6:st.mode==='skid'?.35:0)-spreadV)*Math.min(1,dt*6);
-  // 高立刃刻滑：刃角 30°→48° 之间逐渐换成前刃 / 后刃的高立刃姿态（板立起来了身体就要跟着换，几乎停下时才不换）
-  const dT=!st.air&&!st.crashed&&st.mode==='carve'?Math.sign(st.edge)*smooth(30*DEG,48*DEG,Math.abs(st.edge))*smooth(2,5,sp):0;
-  deepV+=(dT-deepV)*Math.min(1,dt*6);
-  poseRider({crouch:crouchV,lean:st.press,twist:twistV,spread:spreadV,grab:st.air&&st.grabbing?(st.grabName||grabNameFor(lastInp)):null,look:st.fwd,deep:deepV});
+  poseRider({crouch:crouchV,lean:st.press,twist:twistV,spread:spreadV,grab:st.air&&st.grabbing?(st.grabName||grabNameFor(lastInp)):null,look:st.fwd});
   // 镜头
   if(!st.crashed){
     if(sp>1.5)tmpV.set(st.v.x,0,st.v.z).normalize();else tmpV.set(Fv.x*st.fwd,0,Fv.z*st.fwd).normalize();
@@ -1045,5 +1030,5 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 document.addEventListener('visibilitychange',()=>{last=performance.now();});
-window.__edgeline={st,step,H,Hbase,placeAt,KICK,BIG,PISTES,FINISH,laneAt,laneD,halfAt,pisteX:laneAt,surfaceAt,nearestPiste,center,fx,drainFx,score,treeGrid,TREE_CELL,MOG0,MOG1,snapCamera,updateVisual,rig};
+window.__edgeline={st,step,H,Hbase,placeAt,KICK,BIG,PISTES,FINISH,laneAt,laneD,halfAt,pisteX:laneAt,surfaceAt,nearestPiste,center,fx,drainFx,score,treeGrid,TREE_CELL,MOG0,MOG1,snapCamera};
 })();

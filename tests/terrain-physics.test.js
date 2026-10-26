@@ -63,18 +63,51 @@ test('陡坡：直冲比缓坡快得多，推坡能刹到一半以下', () => {
   assert.ok(st.v.length() < v0 * 0.5, `刹车前 ${v0.toFixed(1)}，刹车后 ${st.v.length().toFixed(1)}`);
 });
 
-test('刻滑大道：左右交替大刃角刻滑 12 秒不摔，打出 Deep Carve', () => {
+test('刻滑大道：左右交替大刃角刻滑 12 秒不摔，打出高立刃刻滑', () => {
   reset(1000, 2); ride(2, IDLE);
   let dir = 1, deep = false;
   for (let i = 0; i < 12 * 120 && !st.crashed; i++) {
     const head = Math.atan2(st.v.x, -st.v.z); // 相对滚落线的行进方向，往 -x 偏为负
     if (dir > 0 && head < -0.55) dir = -1; else if (dir < 0 && head > 0.55) dir = 1;
     E.step(DT, { ...IDLE, steer: dir, steerSm: dir });
-    if (/Deep Carve/.test(popup())) deep = true;
+    if (/高立刃刻滑/.test(popup())) deep = true;
   }
   assert.deepEqual(crashes(), []);
-  assert.ok(deep, '没有打出 Deep Carve');
+  assert.ok(deep, '没有打出高立刃刻滑');
   assert.ok(E.surfaceAt(st.p.x, st.p.z).k === 2, '刻滑时滑出了刻滑大道');
+});
+
+test('高立刃刻滑姿态：前刃跪压、双手探雪；后刃坐向脚跟侧、前膝顶起、后手撑雪；都不穿进雪里', () => {
+  const THREE = require('three'), W = new THREE.Vector3(), P = E.rig.P;
+  const above = o => { o.getWorldPosition(W); return W.y - E.H(W.x, W.z); };
+  const pose = () => { E.rig.frame.updateMatrixWorld(true); const r = {}; for (const k of ['hip', 'knF', 'knR', 'hdF', 'hdR', 'chest', 'head', 'elF', 'elR']) r[k] = above(P[k]); return r; };
+  const seen = {};
+  for (const s of [1, -1]) {
+    reset(1000, 2);
+    for (let i = 0; i < 480; i++) { E.step(DT, IDLE); E.updateVisual(DT); }
+    const base = pose();
+    let low = null;
+    for (let i = 0; i < 240; i++) { E.step(DT, { ...IDLE, steer: s, steerSm: s }); E.updateVisual(DT); }
+    assert.equal(st.mode, 'carve'); assert.ok(Math.abs(st.edge) > 45 * Math.PI / 180, '刃角没立起来');
+    low = pose();
+    const side = st.edge > 0 ? 'toe' : 'heel'; seen[side] = true;
+    for (const [k, v] of Object.entries(low)) assert.ok(v > -0.08, `${side} ${k} 穿进雪里 ${v.toFixed(2)} m`);
+    assert.ok(low.hip < base.hip - 0.3, `${side} 髋没压低：${base.hip.toFixed(2)} → ${low.hip.toFixed(2)}`);
+    if (side === 'toe') {
+      assert.ok(Math.min(low.hdF, low.hdR) < 0.3, `前刃手离雪面 ${Math.min(low.hdF, low.hdR).toFixed(2)} m`);
+      assert.ok(low.knR < 0.3, `前刃后膝离雪面 ${low.knR.toFixed(2)} m`);
+    } else {
+      assert.ok(low.hdR < 0.3, `后刃后手离雪面 ${low.hdR.toFixed(2)} m`);
+      assert.ok(low.knF > low.knR + 0.2, `后刃前膝 ${low.knF.toFixed(2)} 应明显高于后膝 ${low.knR.toFixed(2)}`);
+    }
+  }
+  assert.ok(seen.toe && seen.heel, '前刃、后刃没都做到');
+  // 低刃角刻滑保持基础姿态
+  reset(1000, 2); for (let i = 0; i < 480; i++) { E.step(DT, IDLE); E.updateVisual(DT); }
+  const b = pose();
+  for (let i = 0; i < 120; i++) { E.step(DT, { ...IDLE, steer: 0.35, steerSm: 0.35 }); E.updateVisual(DT); }
+  assert.ok(Math.abs(st.edge) < 25 * Math.PI / 180);
+  assert.ok(pose().hip > b.hip - 0.15, '低刃角时姿态不该变');
 });
 
 test('大跳台：从助滑区直冲，滞空 2–3.6 秒，安全落地', () => {

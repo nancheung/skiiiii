@@ -4,13 +4,13 @@
 
 ## 结构
 
-- `index.html` — 页面骨架与 HUD、小地图、触屏控件、开始 / 结束卡片（含雪道选择、音频开关）
+- `index.html` — 页面骨架与 HUD、小地图、触屏控件、开始 / 结束卡片（含雪道选择、骑手性别 / 雪服颜色、音频开关）
 - `css/style.css` — HUD 样式（设计 token 在 `:root`）
 - `js/game.js` — 全部游戏逻辑：雪山与雪道几何（`PISTES`、`Hbase`、`H(x,z)`、`surfaceAt`）、渲染、骑手骨骼、雪板物理、输入、HUD
 - `js/audio.js` — Web Audio 合成 BGM 与音效，暴露 `window.EdgelineAudio`；没有 `AudioContext` 时是空操作
 - `audio/` — 可选的替换音频，`manifest.json` 登记文件（说明见 `audio/README.md`）
 - `tests/boot.js` — 测试启动器：假渲染器 / 假 DOM 下加载 `game.js`
-- `tests/*.test.js` — `physics`（基本动作）、`mountain`（地形）、`terrain-physics`（各地形上的物理、事件）
+- `tests/*.test.js` — `physics`（基本动作）、`mountain`（地形）、`terrain-physics`（各地形上的物理、事件）、`rider`（骑手外观）
 
 ## 约定
 

@@ -114,6 +114,14 @@ html,body{height:100%;margin:0;overflow:hidden;background:#dbe8f5;color:var(--fg
 .pick button small{font-size:11px;color:var(--muted)}
 .pick button.on{background:var(--fg);color:var(--ink);border-color:var(--fg)}
 .pick button.on small{color:#4a5a6e}
+.who{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.seg{display:flex;border:1px solid var(--hair);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;font-weight:700;color:var(--fg);background:rgba(255,255,255,.06);border:none;padding:6px 16px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--hair)}
+.seg button.on{background:var(--fg);color:var(--ink)}
+.sw{display:flex;flex-wrap:wrap;gap:8px}
+.sw button{width:24px;height:24px;padding:0;border-radius:50%;border:none;background:var(--c);box-shadow:0 0 0 1.5px rgba(255,255,255,.35);cursor:pointer}
+.sw button.on{box-shadow:0 0 0 2px var(--ink),0 0 0 4px var(--fg)}
 .opts{display:flex;gap:18px;font-size:13px;color:#d7e1ec}
 .opts label{display:flex;align-items:center;gap:6px;cursor:pointer}
 .opts input{accent-color:var(--accent);width:16px;height:16px}

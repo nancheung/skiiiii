@@ -422,10 +422,32 @@ function makeRig(){
   const helm=new T3.Mesh(new T3.SphereGeometry(.135,18,14),mH);helm.castShadow=true;head.add(helm);
   const gog=new T3.Mesh(new T3.BoxGeometry(.2,.065,.06),mG);gog.position.set(0,.005,.11);head.add(gog);
   const neckM=new T3.Mesh(new T3.CylinderGeometry(.07,.08,.12,8),mJ);head.add(neckM);neckM.position.y=-.12;
-  P.head=head;
-  return {frame,pivot,body,P};
+  // 马尾（女性外观才显示）：从头盔后下沿垂下来
+  const mHr=M('#3b2a20',.9),hair=new T3.Group();hair.position.set(0,-.02,-.13);hair.rotation.x=-.5;
+  const tail=new T3.Mesh(new T3.CylinderGeometry(.05,.03,.26,8),mHr);tail.position.y=-.13;tail.castShadow=true;hair.add(tail);
+  const tip=new T3.Mesh(new T3.SphereGeometry(.035,8,6),mHr);tip.position.y=-.26;hair.add(tip);
+  hair.visible=false;head.add(hair);
+  P.head=head;P.hair=hair;
+  return {frame,pivot,body,P,mats:{mJ,mP},torsoGeo:{m:P.torso.geometry,f:new T3.CylinderGeometry(.15,.14,1,10)},shW:.19};
 }
 const rig=makeRig();
+// 骑手外观：性别（体型、马尾）和雪服配色，纯视觉，不影响物理
+const RIDER_COLORS=[
+  {key:'red',name:'红',jacket:'#e4523b',pants:'#1e2b42'},{key:'orange',name:'橙',jacket:'#ff8a1f',pants:'#2a2f36'},
+  {key:'yellow',name:'黄',jacket:'#f2c230',pants:'#2b3440'},{key:'green',name:'绿',jacket:'#2fa86a',pants:'#23302a'},
+  {key:'blue',name:'蓝',jacket:'#2f6fe0',pants:'#1b2433'},{key:'purple',name:'紫',jacket:'#8a5cd6',pants:'#261f38'},
+  {key:'pink',name:'粉',jacket:'#f07aa8',pants:'#2d2a3a'},{key:'black',name:'黑',jacket:'#23272e',pants:'#4a5262'}];
+const rider={gender:'m',color:'red'};
+function setRider(o,save=true){
+  if(o&&(o.gender==='m'||o.gender==='f'))rider.gender=o.gender;
+  if(o&&RIDER_COLORS.some(c=>c.key===o.color))rider.color=o.color;
+  const C=RIDER_COLORS.find(c=>c.key===rider.color),f=rider.gender==='f',P=rig.P;
+  rig.mats.mJ.color.set(C.jacket);rig.mats.mP.color.set(C.pants);
+  P.hair.visible=f;P.torso.geometry=f?rig.torsoGeo.f:rig.torsoGeo.m;
+  P.chest.scale.set(f?.9:1,1,f?.85:1);P.hip.scale.set(f?1.08:1,1,f?1.05:1);rig.shW=f?.17:.19;
+  if(save)try{localStorage.setItem('edgeline-rider',JSON.stringify(rider));}catch(e){}
+}
+try{setRider(JSON.parse(localStorage.getItem('edgeline-rider')||'null'),false);}catch(e){setRider(null,false);}
 const _d=new V3(),_p=new V3();
 function setLimb(m,a,b){_d.subVectors(b,a);const L=_d.length();m.position.copy(a).addScaledVector(_d,.5);m.scale.set(1,Math.max(L,.001),1);m.quaternion.setFromUnitVectors(UPY,_d.normalize());}
 function ik(a,b,l1,l2,hint,mid,end){
@@ -451,7 +473,7 @@ function poseRider(o){
   setLimb(P.torso,pv.hip,pv.neck);P.chest.position.copy(pv.hip).addScaledVector(pv.dir,.42);
   const tw=o.twist;pv.ax.set(Math.cos(tw),0,-Math.sin(tw));
   pv.shC.copy(pv.neck).addScaledVector(pv.dir,-.06);
-  pv.sF.copy(pv.shC).addScaledVector(pv.ax,.19);pv.sR.copy(pv.shC).addScaledVector(pv.ax,-.19);
+  pv.sF.copy(pv.shC).addScaledVector(pv.ax,rig.shW);pv.sR.copy(pv.shC).addScaledVector(pv.ax,-rig.shW);
   const sp=o.spread;
   pv.tF.copy(pv.sF).addScaledVector(pv.ax,.18+.2*sp).add(pv.tmp.set(0,-.38+.2*sp,.12));
   pv.tR.copy(pv.sR).addScaledVector(pv.ax,-.16-.2*sp).add(pv.tmp.set(0,-.4+.2*sp,.06));
@@ -1005,6 +1027,10 @@ document.querySelectorAll('#pick button').forEach(b=>b.addEventListener('click',
   pick=+b.dataset.p;document.querySelectorAll('#pick button').forEach(o=>o.classList.toggle('on',o===b));
   score.total=0;score.combo=0;st.done=false;st.runTime=0;st.visited.clear();trail.clear();placeAt(startS(pick),pick<0?2:pick);snapCamera();$('goBtn').textContent='开始滑行';
 }));
+// 骑手外观：性别 / 雪服颜色（选了立刻生效并记住）
+const riderBtns=(sel,attr,k)=>{const bs=document.querySelectorAll(sel);bs.forEach(b=>{b.classList.toggle('on',b.dataset[attr]===rider[k]);
+  b.addEventListener('click',()=>{setRider({[k]:b.dataset[attr]});bs.forEach(o=>o.classList.toggle('on',o===b));});});};
+riderBtns('#gender button','g','gender');riderBtns('#colors button','c','color');
 for(const [id,k] of[['optMusic','music'],['optSfx','sfx']]){const el=$(id);if(!el)continue;if(SND.state[k]===false)el.checked=false;el.addEventListener('change',()=>{SND.unlock();SND.set(k,el.checked);});}
 syncMute();
 
@@ -1030,5 +1056,5 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 document.addEventListener('visibilitychange',()=>{last=performance.now();});
-window.__edgeline={st,step,H,Hbase,placeAt,KICK,BIG,PISTES,FINISH,laneAt,laneD,halfAt,pisteX:laneAt,surfaceAt,nearestPiste,center,fx,drainFx,score,treeGrid,TREE_CELL,MOG0,MOG1,snapCamera};
+window.__edgeline={st,step,H,Hbase,placeAt,KICK,BIG,PISTES,FINISH,laneAt,laneD,halfAt,pisteX:laneAt,surfaceAt,nearestPiste,center,fx,drainFx,score,treeGrid,TREE_CELL,MOG0,MOG1,snapCamera,rig,rider,setRider,RIDER_COLORS};
 })();

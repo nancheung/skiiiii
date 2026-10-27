@@ -148,8 +148,8 @@ const ZONES={
   base:['山脚大道','终点在 3600 m'],
   groomed:['压雪道',''],
   powder:['粉雪 POWDER','重心压后（S）让板头浮起来，别压板头'],
-  moguls:['蘑菇道 MOGULS','按住 Shift 左右交替拨：搓雪小回转控速'],
-  steep:['陡坡 STEEP','37° 黑道，搓雪小回转或推坡控速'],
+  moguls:['蘑菇道 MOGULS','按住 Shift 左右交替拨：月牙形的搓雪小回转控速'],
+  steep:['陡坡 STEEP','37° 黑道：搓雪小回转把弯做完整，或者推坡'],
   carve:['刻滑 CARVING','100 米宽，放心立大刃角'],
   park:['公园 PARK','跳台在中线，2200 m 有大跳台'],
   off:['野雪 · 树林','小心树，按 R 回到雪道']
@@ -548,12 +548,13 @@ const DIFF={
 const BAL_L=1, BAL_K=1.5, BAL_C=2, BAL_NOISE=.5, BAL_EDGE=2, BAL_DEFLECT=.8, BAL_ROLL=.6;
 const BRAKE_BACK=1.5; // 松开推坡后最多花多久把板转回行进方向
 const SCRUB_MIN=45*DEG, SCRUB_RAMP=.8; // 搓雪：一按下板横过的角度；按住多久长到 90°（推坡）
+const SCRUB_TURN=55*DEG, SCRUB_PAST=15*DEG, SCRUB_K=.5; // 搓雪转弯：上半弧板领先行进方向的最大角度；过滚落线时的领先角；离滚落线每 1° 多领先多少
 let diff=DIFF.easy;
 const st={p:new V3(),v:new V3(),yaw:Math.PI,edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,take:null,charging:false,charge:0,windup:0,noseLoad:false,
   grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,butterSide:0,butterFwd:1,deepT:0,deepMax:0,deepSide:1,crashed:false,crashT:0,crashRoll:0,crashSide:1,
   mode:'flat',vf:0,vl:0,speed:0,fwd:1,grip:false,butter:false,nVis:new V3(0,1,0),s:0,time:0,runTime:0,done:false,
   piste:2,zone:'top',zoneKey:'top',zoneHold:0,pw:0,noseT:0,stuckT:0,lastImpact:0,guard:false,visited:new Set(),
-  braking:false,brakeEdge:0,brakeFwd:1,brakeSide:1,brakeT:0,brakeAmt:0,unbrake:0,bal:0,balV:0,roll:null,rng:1};
+  braking:false,brakeEdge:0,brakeFwd:1,brakeSide:1,brakeT:0,brakeAmt:0,scrub:null,scrubLead:0,unbrake:0,bal:0,balV:0,roll:null,rng:1};
 const N0=new V3(),N1=new V3(),N2=new V3(),F0=new V3(),T0=new V3(),U0=new V3(),LEFT=new V3(),GT=new V3(),TIP=new V3(),VT=new V3();
 const score={total:0,best:0,combo:0,lastT:-99};
 const bestKey=()=>diff.key==='hard'?'edgeline-best-hard':'edgeline-best';
@@ -577,7 +578,7 @@ function placeAt(s,p){
   const x=laneAt(p,s),z=-s;st.p.set(x,H(x,z),z);st.v.set(0,0,0);
   st.yaw=Math.atan2(laneD(p,s),-1);st.s=s;
   Object.assign(st,{edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,charging:false,charge:0,windup:0,grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,deepT:0,crashed:false,crashT:0,crashRoll:0,mode:'flat',piste:p,noseT:0,stuckT:0,guard:false,
-    braking:false,brakeT:0,brakeAmt:0,unbrake:0,bal:0,balV:0,roll:null,rng:1+Math.floor(Math.abs(s)*7919)%2147483646});
+    braking:false,brakeT:0,brakeAmt:0,scrub:null,unbrake:0,bal:0,balV:0,roll:null,rng:1+Math.floor(Math.abs(s)*7919)%2147483646});
   normalAt(st.p.x,st.p.z,st.nVis);trail.breakStroke();
 }
 function crash(reason){
@@ -660,9 +661,11 @@ function groundStep(dt,inp){
   if(!st.guard){if(slip>GUARD_SLIP&&Math.abs(vl0)>GUARD_V)st.guard=true;}
   else if(slip<GUARD_OFF||Math.abs(vl0)<.6)st.guard=false;
 
-  // 搓雪 / 推坡：在哪个刃就用哪个刃（按下时拨着方向就用拨向的那条刃）。板相对行进方向横过 θ，
-  // θ 从 SCRUB_MIN 起，按住 SCRUB_RAMP 秒左右长到 90°：轻按是搓雪减速，按久了就是推坡。
-  // 按住时左右换方向就换刃，板先放平从滚落线上拧过去再立新刃 —— 左右交替就是搓雪小回转。
+  // 搓雪 / 推坡：在哪个刃就用哪个刃（按下时拨着方向就用拨向的那条刃），板相对行进方向横过 θ。
+  // 只按 Shift（'brake'）：θ 从 SCRUB_MIN 起，按住 SCRUB_RAMP 秒左右长到 90°：轻按是搓雪减速，按久了就是推坡。
+  // Shift + 方向（'turn'）：搓雪转弯。只在弯的上半段（拨向的刃在山下一侧）搓，越接近滚落线搓得越少；
+  // 过了滚落线这条刃到了山上一侧，交给刻滑走刃，画出月牙弯，按多久都不会刹停。左右交替就是搓雪小回转。
+  // 按住时左右换方向就换刃，板先放平从滚落线上拧过去再立新刃。
   // T=f(yaw-π/2)：正脚时后刃在上坡要 yaw=au+θ，前刃 yaw=au-θ；反脚反过来
   const au=Math.atan2(U0.x,U0.z);
   if(inp.brake&&!st.braking){
@@ -670,22 +673,32 @@ function groundStep(dt,inp){
     st.brakeEdge=Math.abs(inp.steer)>.3?Math.sign(inp.steer*sideSign):Math.abs(st.edge)>3*DEG?Math.sign(st.edge):(Math.abs(c1)<Math.abs(c2)?-1:1);
     st.brakeFwd=fwd;st.brakeSide=sideSign;st.brakeT=0;
   }else if(inp.brake&&Math.abs(inp.steer)>.5&&Math.sign(inp.steer*st.brakeSide)!==st.brakeEdge){st.brakeEdge=-st.brakeEdge;st.brakeT=0;}
-  if(inp.brake)st.brakeT+=dt;
-  st.brakeAmt=inp.brake?smooth(.15,SCRUB_RAMP,st.brakeT):0;
-  if(!inp.brake&&st.braking)st.unbrake=BRAKE_BACK; // 松手回正
-  st.braking=inp.brake;
+  let scrub=null;
+  if(inp.brake){
+    if(Math.abs(inp.steer)>.3){
+      // 上半弧：行进方向还没转过滚落线（板领先的方向 r 上还看得到滚落线）。板往滚落线拧（再过一点），
+      // 离滚落线越远拧得越多、搓得越狠；行进方向一过滚落线就交给刻滑走刃
+      const r=-st.brakeEdge*st.brakeFwd,toFall=Math.hypot(n.x,n.z)>.02&&sp>1?wrapPi(Math.atan2(n.x,n.z)-au):0;
+      if(Math.sign(toFall)===r||slip>25*DEG)scrub='turn'; // 板还横着（比如刚推完坡）就先搓着拧过来，对齐了才走刃
+      st.scrubLead=clamp(SCRUB_K*Math.abs(toFall)+SCRUB_PAST,SCRUB_PAST,SCRUB_TURN);
+    }else scrub='brake';
+  }
+  if(scrub==='brake'){if(st.scrub!=='brake')st.brakeT=0;st.brakeT+=dt;}
+  st.brakeAmt=scrub==='brake'?smooth(.15,SCRUB_RAMP,st.brakeT):0;
+  if(!inp.brake&&st.scrub)st.unbrake=BRAKE_BACK; // 搓着雪松手才回正；下半弧已经在走刃就不用
+  st.braking=inp.brake;st.scrub=scrub;
   if(st.unbrake>0){st.unbrake-=dt;if(Math.abs(inp.steer)>.3||butter||inp.brake)st.unbrake=0;}
   const back=st.unbrake>0;
 
   // 目标立刃角与偏航
   let eT=0,yawRate=0,sideSlip=false;
   let flatPivot=false;
-  if(inp.brake){
-    const amt=st.brakeAmt,th=SCRUB_MIN+(Math.PI/2-SCRUB_MIN)*amt;
+  if(scrub){
+    const amt=st.brakeAmt,th=scrub==='turn'?st.scrubLead:SCRUB_MIN+(Math.PI/2-SCRUB_MIN)*amt;
     const head=(sp>1?au:Math.atan2(n.x,n.z))+(st.brakeFwd>0?0:Math.PI); // 速度太低就以滚落线为准
     yawRate=clamp(wrapPi(head-st.brakeEdge*th*st.brakeFwd-st.yaw)*7,-4.5,4.5);
     flatPivot=Math.sign(vl0)===st.brakeEdge&&Math.abs(vl0)>.8; // 新刃还在下坡一侧：板放平从滚落线上拧过去
-    eT=flatPivot?0:st.brakeEdge*(20+8*amt)*DEG;
+    eT=flatPivot?0:st.brakeEdge*(scrub==='turn'?24:20+8*amt)*DEG;
   }else if(back){
     // 松开推坡：板转回推坡前的朝向（速度太低时转向滚落线），刃保持在推坡那一侧（一直是上坡刃），越接近对齐越平
     const head=sp>2?au:Math.atan2(n.x,n.z),dy=wrapPi(head+(st.brakeFwd>0?0:Math.PI)-st.yaw);
@@ -704,27 +717,27 @@ function groundStep(dt,inp){
     }else if(st.guard&&!diff.guard&&onUp&&slip>SIDE_SLIP)sideSlip=true;                // 硬核：不替玩家换刃，自己立了上坡刃才算推坡
     if(diff.wobble)eT=clamp(eT+st.bal*BAL_EDGE*(1-smooth(.2,.7,Math.abs(inp.steerSm))),-EMAX,EMAX); // 平板时重心晃到哪边就压到哪边的刃
   }
-  const loose=!inp.brake&&!back&&!butter;
+  const loose=!scrub&&!back&&!butter;
   if(diff.wobble)balance(n,sp,dt,loose);
   st.edge+=(eT-st.edge)*Math.min(1,dt*7);
   const absE=Math.abs(st.edge);
 
   // 上坡刃在侧滑角不太大时就能咬住；下坡刃只有板和速度几乎对齐时才咬得住（正常换刃起弯）
   const correctSide=Math.abs(vl0)<.8||Math.sign(st.edge)===up||slip<GUARD_SLIP;
-  const grip=!butter&&!inp.brake&&!back&&!sideSlip&&absE>9*DEG&&slip<(10*DEG+absE*.6)&&correctSide;
+  const grip=!butter&&!scrub&&!back&&!sideSlip&&absE>9*DEG&&slip<(10*DEG+absE*.6)&&correctSide;
   st.grip=grip;
   if(grip){
     // 转弯半径：侧切半径 × cos(立刃角)，并受立刃角能承受的向心加速度限制；粉雪里板会漂，弯更大
     const R=Math.max(RSC*Math.cos(absE)*(1+.5*pw),(sp*sp)/(G*Math.tan(absE)*1.1));
     yawRate+=-Math.sign(st.edge)*vf0/R*smooth(9*DEG,16*DEG,absE);
-  }else if(!inp.brake&&!butter&&!back){
+  }else if(!scrub&&!butter&&!back){
     yawRate+=inp.steer*fwd*2.4*(1-.6*smooth(2,14,sp))*(st.guard&&diff.guard&&slip<=SIDE_SLIP&&Math.sign(st.edge)===up?.25:1); // 角度差一点、正在顺势立上坡刃时少拧板，让刃先咬住
     if(sp>2.5){ // 板自然回正到行进方向（正脚或反脚）
       const d1=wrapPi(au-st.yaw),d2=wrapPi(au+Math.PI-st.yaw);const d=Math.abs(d1)<Math.abs(d2)?d1:d2;
       yawRate+=d*diff.realign*(1-Math.abs(inp.steer)*.7)*(sideSlip?0:1); // 自动守刃横着推坡时板不会自己转回来，一直推坡到停（按 Shift 推坡松手才回正）
     }
   }
-  if(sp<3&&!butter&&!inp.brake)yawRate+=inp.steer*fwd*1.2;
+  if(sp<3&&!butter&&!scrub)yawRate+=inp.steer*fwd*1.2;
   if(diff.wobble&&loose)yawRate+=deflect(F0,T0,sp);
 
   const dyaw=yawRate*dt;
@@ -748,7 +761,7 @@ function groundStep(dt,inp){
     vl=nvl;vf=(vf>=0?1:-1)*Math.sqrt(Math.max(0,spd*spd-vl*vl));
     st.mode='carve';
   }else{
-    let mu=butter?.24:.05+1.45*Math.sin(absE);const scrub=inp.brake&&!flatPivot;if(scrub)mu+=.12;if(scrub||sideSlip)mu+=.6*smooth(.94,.8,n.y); // 越陡刃咬得越深，陡坡上也能推坡控速
+    let mu=butter?.24:.05+1.45*Math.sin(absE);const scr=scrub&&!flatPivot;if(scr)mu+=.12;if(scr||sideSlip)mu+=.6*smooth(.94,.8,n.y); // 越陡刃咬得越深，陡坡上也能推坡控速
     const d=mu*gn*dt;vl=Math.abs(vl)<=d?0:vl-Math.sign(vl)*d;
     st.mode=butter?'butter':(Math.abs(vl)>1.0?'skid':'flat');
   }
@@ -811,7 +824,7 @@ function pop(n,fwd,strength){
 }
 function beginAir(type,fwd){
   st.air=true;st.airT=0;st.airYaw=0;st.grabName=null;st.grabT=0;
-  st.unbrake=0;st.roll=null; // 空中一直按着推坡的话，落地接着搓
+  st.unbrake=0;st.roll=null;st.scrub=null; // 空中一直按着推坡的话，落地接着搓
   st.take={type,sw:fwd<0,fwd};
   if(st.butterT>0)finishButter();
   finishDeep();
@@ -979,7 +992,7 @@ let hudT=0;
 function updateHud(dt){
   hudT+=dt;if(hudT<1/15)return;hudT=0;
   const sp=st.v.length();hud.spd.textContent=Math.round(sp*3.6);
-  const m=MODE[st.air?'air':st.mode==='carve'&&Math.abs(st.edge)>38*DEG?'deep':st.braking&&!st.crashed?(st.brakeAmt<.75?'scrub':'skid'):st.mode]||MODE.flat;
+  const m=MODE[st.air?'air':st.mode==='carve'&&Math.abs(st.edge)>38*DEG?'deep':st.scrub==='turn'?'scrub':st.scrub==='brake'?(st.brakeAmt<.75?'scrub':'skid'):st.mode]||MODE.flat;
   if(hud.mode.textContent!==m[0]){hud.mode.textContent=m[0];hud.mode.className='chip'+(m[1]?' '+m[1]:'');}
   hud.stance.textContent=st.fwd>0?'REG':'SWITCH';
   const e=st.edge/DEG,ae=Math.abs(e);
@@ -1028,7 +1041,7 @@ function updateVisual(dt){
   if(st.crashed)cr=1;
   crouchV+=(clamp(cr,0,1)-crouchV)*Math.min(1,dt*10);
   let tw=st.air?clamp(-st.spin*.07,-.6,.6):(st.charging?-st.windup*.7:0);
-  if(!st.air&&!st.crashed&&(st.braking||st.unbrake>0)&&sp>1){ // 搓雪 / 推坡：上身反拧朝着行进方向，板在下面左右拧
+  if(!st.air&&!st.crashed&&(st.scrub||st.unbrake>0)&&sp>1){ // 搓雪 / 推坡：上身反拧朝着行进方向，板在下面左右拧
     const head=Math.atan2(st.v.x,st.v.z)+(st.brakeFwd>0?0:Math.PI);tw=clamp(.6*wrapPi(head-st.yaw),-.9,.9);}
   twistV+=(tw-twistV)*Math.min(1,dt*8);
   spreadV+=((st.air&&!st.grabbing?.6:st.mode==='skid'?.35:0)-spreadV)*Math.min(1,dt*6);

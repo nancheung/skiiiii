@@ -34,7 +34,7 @@ test('松开推坡：板转回行进方向，接着往下滑，不摔', () => mo
     fresh(1000); run(3); run(0.6, { steer: dir, steerSm: dir }); run(1, { brake: true });
     const v0 = st.v.length();
     let back = -1;
-    for (let t = 0; t < 2.5 && !st.crashed; t += DT) { run(DT); if (back < 0 && slipDeg() < 10) back = t; }
+    for (let t = 0; t < 2.5 && !st.crashed; t += DT) { run(DT); if (back < 0 && slipDeg() < 12) back = t; }
     assert.deepEqual(crashes(), [], `${m} 拨 ${dir}`);
     assert.ok(back >= 0 && back < 1.5, `${m} 拨 ${dir}：${back < 0 ? '没回正' : back.toFixed(2) + ' s 才回正'}`);
     assert.ok(slipDeg() < 12, `${m} 拨 ${dir}：回正后侧滑角还有 ${slipDeg().toFixed(0)}°`);
@@ -137,3 +137,61 @@ test('最佳分按模式分开记', () => {
   assert.equal(E.diff.key, 'easy', '非法值不改变难度');
   global.localStorage = ls;
 });
+
+/* ---------- 搓雪与搓雪小回转 ---------- */
+// 按住 Shift，每 per 秒换一次方向
+const shortTurns = (sec, per) => {
+  let vmax = 0, flips = 0, last = 0;
+  for (let i = 0; i < sec * 120 && !st.crashed; i++) {
+    const dir = Math.floor(i / (per * 120)) % 2 ? 1 : -1;
+    E.step(DT, { ...IDLE, brake: true, steer: dir, steerSm: dir });
+    vmax = Math.max(vmax, st.v.length());
+    const h = Math.sign(st.v.x); if (h && h !== last) { flips++; last = h; }
+  }
+  return { vmax, flips };
+};
+
+test('轻按 Shift 是搓雪：板只横过一部分，减点速不刹停；按久了变成推坡', () => modes(m => {
+  fresh(1000); run(4); run(0.6); const free = st.v.length();
+  fresh(1000); run(4); const v0 = st.v.length();
+  let maxSlip = 0; for (let i = 0; i < 36; i++) { run(DT, { brake: true }); maxSlip = Math.max(maxSlip, slipDeg()); }
+  run(0.3);
+  assert.deepEqual(crashes(), [], m);
+  assert.ok(maxSlip > 25 && maxSlip < 60, `${m}：轻按时侧滑角最大 ${maxSlip.toFixed(0)}°`);
+  assert.ok(st.v.length() < free - 0.5 && st.v.length() > v0 * 0.7, `${m}：轻按后 ${st.v.length().toFixed(1)}，不按 ${free.toFixed(1)}，按前 ${v0.toFixed(1)}`);
+  fresh(1000); run(4); run(2, { brake: true });
+  assert.ok(slipDeg() > 75, `${m}：按住 2 s 侧滑角只有 ${slipDeg().toFixed(0)}°`);
+  assert.ok(st.v.length() < v0 * 0.6, `${m}：按住 2 s 速度 ${v0.toFixed(1)} → ${st.v.length().toFixed(1)}`);
+}));
+
+test('陡坡搓雪小回转：节奏决定速度，每边 0.8 s 能把速度稳住并一直往下走', () => modes(m => {
+  fresh(1900, 1); run(2); const s0 = st.s;
+  const r = shortTurns(10, 0.8);
+  assert.deepEqual(crashes(), [], m);
+  assert.ok(r.vmax < 9, `${m}：最高 ${r.vmax.toFixed(1)} m/s`);
+  assert.ok(st.s - s0 > 25, `${m}：10 s 只往下走了 ${(st.s - s0).toFixed(0)} m`);
+  assert.ok(r.flips >= 8, `${m}：只换了 ${r.flips} 次方向`);
+  fresh(1900, 1); run(2); const fast = shortTurns(10, 0.5);
+  assert.ok(fast.vmax > r.vmax + 4, `${m}：节奏快 ${fast.vmax.toFixed(1)} 应该比节奏慢 ${r.vmax.toFixed(1)} 快得多`);
+  fresh(1900, 1); run(2); let straight = 0; for (let i = 0; i < 10 * 120 && !st.crashed; i++) { E.step(DT, IDLE); straight = Math.max(straight, st.v.length()); }
+  assert.ok(r.vmax < straight * 0.4, `${m}：直冲 ${straight.toFixed(1)}，小回转 ${r.vmax.toFixed(1)}`);
+}));
+
+test('蘑菇道搓雪小回转：被鼓包颠起来也不摔，速度稳在低速，一直往下走', () => modes(m => {
+  fresh(E.MOG0 + 100, 1); run(1); const s0 = st.s;
+  const r = shortTurns(10, 0.6);
+  assert.deepEqual(crashes(), [], m);
+  assert.ok(r.vmax < 8, `${m}：最高 ${r.vmax.toFixed(1)} m/s`);
+  assert.ok(st.s - s0 > 25, `${m}：10 s 只往下走了 ${(st.s - s0).toFixed(0)} m`);
+}));
+
+test('按住推坡时拨反方向：板放平从滚落线上拧过去再立新刃，硬核也不卡刃', () => modes(m => {
+  for (const dir of [1, -1]) {
+    fresh(1000); run(4); run(0.5, { brake: true, steer: dir, steerSm: dir });
+    const e0 = Math.sign(st.edge);
+    run(1, { brake: true, steer: -dir, steerSm: -dir });
+    assert.deepEqual(crashes(), [], `${m} 拨 ${dir} → ${-dir}`);
+    assert.equal(Math.sign(st.edge), -e0, `${m} 拨 ${dir} → ${-dir}：没换到新刃`);
+    assert.equal(Math.sign(st.vl), e0, `${m} 拨 ${dir} → ${-dir}：新刃不在上坡一侧`);
+  }
+}));

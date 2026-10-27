@@ -10,7 +10,7 @@
 - `js/audio.js` — Web Audio 合成 BGM 与音效，暴露 `window.EdgelineAudio`；没有 `AudioContext` 时是空操作
 - `audio/` — 可选的替换音频，`manifest.json` 登记文件（说明见 `audio/README.md`）
 - `tests/boot.js` — 测试启动器：假渲染器 / 假 DOM 下加载 `game.js`
-- `tests/*.test.js` — `physics`（基本动作）、`mountain`（地形）、`terrain-physics`（各地形上的物理、事件）、`rider`（骑手外观）、`difficulty`（轻松 / 硬核、推坡）
+- `tests/*.test.js` — `physics`（基本动作）、`mountain`（地形）、`terrain-physics`（各地形上的物理、事件）、`rider`（骑手外观）、`difficulty`（轻松 / 硬核、推坡、搓雪小回转）
 
 ## 约定
 
@@ -18,7 +18,7 @@
 - 坐标：下坡为 `-z`，`s = -z`。终点在 `s = FINISH`（3600）。雪道 `i` 的中线 `laneAt(i, s)`，半宽 `halfAt(i, s)`。`f(yaw) = (sin yaw, 0, cos yaw)`。脚尖方向 `T = F × n`。立刃角正值为前刃。
 - 板局部坐标：X 指板头，Y 为板面法线，Z 指脚尖一侧。骑手面朝 +Z，默认 regular 站姿（左脚在前）。
 - 输入 `steer` 为正表示「往屏幕左边」。
-- 改物理参数（`EMAX`、`RSC`、摩擦系数、起跳力度、粉雪 `PW_*`、卡刃 / 自动守刃 `GUARD_*` `CATCH_*` `SIDE_SLIP` `LAND_LAT`、难度表 `DIFF`、硬核平衡 `BAL_*`、推坡回正 `BRAKE_BACK`）或地形（`PISTES` 的 `knots`/`zones`、`KICK`、蘑菇 `MOG*`）后必须跑 `npm test`，并在测试里补上新动作 / 新地形的场景。
+- 改物理参数（`EMAX`、`RSC`、摩擦系数、起跳力度、粉雪 `PW_*`、卡刃 / 自动守刃 `GUARD_*` `CATCH_*` `SIDE_SLIP` `LAND_LAT`、难度表 `DIFF`、硬核平衡 `BAL_*`、推坡回正 `BRAKE_BACK`、搓雪 `SCRUB_*`）或地形（`PISTES` 的 `knots`/`zones`、`KICK`、蘑菇 `MOG*`）后必须跑 `npm test`，并在测试里补上新动作 / 新地形的场景。
 - 地形特征（蘑菇、跳台）只能往 `Hbase` 上加高度（≥0），远处网格用 `Hbase` 采样，细网格盖在上面。
 - 难度：`diff` 是 `DIFF.easy` / `DIFF.hard`，物理里只读 `diff.*`；硬核的平衡抖动用 `st.rng` 种子随机数（`placeAt` 时按位置重置），影响物理状态的随机数不要用 `Math.random`（雪雾等纯视觉的可以），测试要能复现。
 - `step()` 不直接调音频或改界面：往 `fx` 队列里 `emit({type,...})`，由帧循环 `drainFx` 分发给 `EdgelineAudio.event` 和横幅。

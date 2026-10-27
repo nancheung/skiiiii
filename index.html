@@ -71,13 +71,17 @@
         <span><i>★</i> 点个 Star</span>
       </a>
     </div>
-    <p>从海拔 2700 米的山顶出发，500 米处分成四条雪道，最后都在山脚汇合。立刃刻滑、推坡、平花和 Ollie / Nollie 转体都由同一套雪板物理算出来：立刃角决定抓地和转弯半径，高速横滑时把下坡刃压进雪里会卡刃摔倒。</p>
+    <p>从海拔 2700 米的山顶出发，500 米处分成四条雪道，最后都在山脚汇合。立刃刻滑、推坡、平花和 Ollie / Nollie 转体都由同一套雪板物理算出来：立刃角决定抓地和转弯半径，高速横滑时把下坡刃压进雪里会卡刃摔倒。<b>硬核</b>模式不再自动守刃，平板时会随地形和平衡左右晃，蘑菇道上很容易卡刃。</p>
     <div class="pick" id="pick" role="group" aria-label="出发位置">
       <button type="button" data-p="-1" class="on"><i style="--c:#ff7a1a"></i><b>山顶出发</b><small>分岔口自己选</small></button>
       <button type="button" data-p="0"><i style="--c:#e0383e"></i><b>A 粉雪大白坡</b><small>150 m 宽的粉雪碗</small></button>
       <button type="button" data-p="1"><i style="--c:#16181c"></i><b>B 黑钻蘑菇墙</b><small>蘑菇道 + 37° 陡坡</small></button>
       <button type="button" data-p="2"><i style="--c:#2f6fe0"></i><b>C 长城刻滑大道</b><small>100 m 宽，适合刻滑</small></button>
       <button type="button" data-p="3"><i style="--c:#ff7a1a"></i><b>D Edgeline 公园</b><small>小跳台连跳 + 大跳台</small></button>
+    </div>
+    <div class="who" role="group" aria-label="难度">
+      <div class="seg" id="diff" role="group" aria-label="难度"><button type="button" data-d="easy" class="on">轻松</button><button type="button" data-d="hard">硬核</button></div>
+      <small class="diff-note" id="diffNote">自动守刃，落地太重只算不稳</small>
     </div>
     <div class="who" role="group" aria-label="骑手外观">
       <div class="seg" id="gender" role="group" aria-label="性别"><button type="button" data-g="m" class="on">男</button><button type="button" data-g="f">女</button></div>
@@ -96,7 +100,7 @@
       <dt>A / D · ← →</dt><dd>往左 / 右立刃转弯。地面上刃角越大弯越紧，空中用来转体</dd>
       <dt>W / S · ↑ ↓</dt><dd>压前端 / 压后端，压住时左右键做平花（butter）</dd>
       <dt>空格</dt><dd>按住蓄力，松开起跳。蓄力时按住 W 是 Nollie，按住左右键是预拧</dd>
-      <dt>Shift</dt><dd>推坡：板横过来用上坡那条刃刹车</dd>
+      <dt>Shift</dt><dd>按住推坡：用当前所在的刃（前刃 / 后刃）把板横过来刹车，松手板回正</dd>
       <dt>J</dt><dd>空中抓板（配合 W / S 换抓法），落地前要松开</dd>
       <dt>R</dt><dd>回到最近雪道的中间</dd>
       <dt>M</dt><dd>静音 / 取消静音</dd>
@@ -104,7 +108,7 @@
     <dl class="ctl touch-only">
       <dt>左摇杆</dt><dd>左右：立刃转弯，空中转体；上下：压前 / 压后，压住再左右拨是平花</dd>
       <dt>起跳</dt><dd>按住蓄力，松开起跳。摇杆推上再松手是 Nollie</dd>
-      <dt>推坡</dt><dd>按住，板横过来刹车</dd>
+      <dt>推坡</dt><dd>按住，用当前所在的刃把板横过来刹车，松手回正</dd>
       <dt>抓板</dt><dd>空中按住抓板，落地前松开</dd>
     </dl>
     <div class="tip"><b>粉雪</b>里重心压后（S / 摇杆往下）板头才浮得起来，压板头会扎进雪里。<b>大跳台</b>建议 50–75 km/h 起跳，太快会落到平地上摔。<b>Nollie 360：</b>压前端并按住起跳蓄力，同时往一侧拨，松开后继续往同一侧拨，转满一圈时回正落地。</div>

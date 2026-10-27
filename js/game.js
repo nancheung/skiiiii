@@ -539,13 +539,30 @@ const EMAX=52*DEG, RSC=7.6, DRAG=0.0036;
 // 真卡刃要同时满足滑动方向那侧的刃角 > CATCH_E、侧滑速度 > CATCH_V、侧滑角 > CATCH_SLIP；横着落地看侧向速度 LAND_LAT
 const GUARD_SLIP=12*DEG, GUARD_OFF=8*DEG, GUARD_V=1.5, SIDE_SLIP=45*DEG, CATCH_E=20*DEG, CATCH_V=4.5, CATCH_SLIP=25*DEG, LAND_LAT=6;
 const PW_MU=.06, PW_DRAG=.008, PW_FLOAT=.6, PW_LAND=3.5; // 粉雪：额外滑动阻力、速度平方阻力、压后时阻力倍率、落地缓冲
+// 难度：轻松 = 自动守刃 + 落地太重不摔；硬核 = 不替玩家换刃、卡刃阈值更低、平板会因地形和平衡左右晃（BAL_*）
+const DIFF={
+  easy:{key:'easy',name:'轻松',guard:true,catchE:CATCH_E,catchV:CATCH_V,catchSlip:CATCH_SLIP,heavy:false,realign:2.6,wobble:false},
+  hard:{key:'hard',name:'硬核',guard:false,catchE:12*DEG,catchV:3,catchSlip:15*DEG,heavy:true,realign:1.3,wobble:true}};
+// 平衡：重心相对板面的偏角 bal 是倒立摆（G/BAL_L），骑手反射 BAL_K·G、阻尼 BAL_C；随速度增大的抖动 BAL_NOISE；bal 换算成刃角 BAL_EDGE；
+// 雪面横向翻转传到重心的比例 BAL_ROLL（其余被腿吸收）；板头板尾横向坡度不同时把板拧偏的系数 BAL_DEFLECT
+const BAL_L=1, BAL_K=1.5, BAL_C=2, BAL_NOISE=.5, BAL_EDGE=2, BAL_DEFLECT=.8, BAL_ROLL=.6;
+const BRAKE_BACK=1.5; // 松开推坡后最多花多久把板转回行进方向
+let diff=DIFF.easy;
 const st={p:new V3(),v:new V3(),yaw:Math.PI,edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,take:null,charging:false,charge:0,windup:0,noseLoad:false,
   grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,butterSide:0,butterFwd:1,deepT:0,deepMax:0,deepSide:1,crashed:false,crashT:0,crashRoll:0,crashSide:1,
   mode:'flat',vf:0,vl:0,speed:0,fwd:1,grip:false,butter:false,nVis:new V3(0,1,0),s:0,time:0,runTime:0,done:false,
-  piste:2,zone:'top',zoneKey:'top',zoneHold:0,pw:0,noseT:0,stuckT:0,lastImpact:0,guard:false,visited:new Set()};
-const N0=new V3(),N1=new V3(),F0=new V3(),T0=new V3(),U0=new V3(),LEFT=new V3(),GT=new V3(),TIP=new V3(),VT=new V3();
+  piste:2,zone:'top',zoneKey:'top',zoneHold:0,pw:0,noseT:0,stuckT:0,lastImpact:0,guard:false,visited:new Set(),
+  braking:false,brakeEdge:0,brakeFwd:1,unbrake:0,bal:0,balV:0,roll:null,rng:1};
+const N0=new V3(),N1=new V3(),N2=new V3(),F0=new V3(),T0=new V3(),U0=new V3(),LEFT=new V3(),GT=new V3(),TIP=new V3(),VT=new V3();
 const score={total:0,best:0,combo:0,lastT:-99};
-try{score.best=+(localStorage.getItem('edgeline-best')||0);}catch(e){}
+const bestKey=()=>diff.key==='hard'?'edgeline-best-hard':'edgeline-best';
+function setDifficulty(k,save=true){
+  if(DIFF[k])diff=DIFF[k];
+  score.best=0;try{score.best=+(localStorage.getItem(bestKey())||0);}catch(e){}
+  if(save)try{localStorage.setItem('edgeline-diff',diff.key);}catch(e){}
+}
+try{setDifficulty(localStorage.getItem('edgeline-diff'),false);}catch(e){setDifficulty('easy',false);}
+const rand=()=>(st.rng=st.rng*16807%2147483647)/2147483647; // 平衡抖动用的可复现随机数
 // step() 不直接碰音频 / 界面，往这里推事件，由帧循环取走
 const fx=[];
 function emit(e){fx.push(e);if(fx.length>64)fx.shift();}
@@ -558,7 +575,8 @@ function placeAt(s,p){
   for(const k of KICK){if(k.p===p&&s>k.s-k.ramp-3&&s<k.s+k.land+1)s=k.s+k.land+2;}
   const x=laneAt(p,s),z=-s;st.p.set(x,H(x,z),z);st.v.set(0,0,0);
   st.yaw=Math.atan2(laneD(p,s),-1);st.s=s;
-  Object.assign(st,{edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,charging:false,charge:0,windup:0,grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,deepT:0,crashed:false,crashT:0,crashRoll:0,mode:'flat',piste:p,noseT:0,stuckT:0,guard:false});
+  Object.assign(st,{edge:0,press:0,air:false,airT:0,spin:0,airYaw:0,charging:false,charge:0,windup:0,grabT:0,grabName:null,grabbing:false,butterT:0,butterYaw:0,deepT:0,crashed:false,crashT:0,crashRoll:0,mode:'flat',piste:p,noseT:0,stuckT:0,guard:false,
+    braking:false,unbrake:0,bal:0,balV:0,roll:null,rng:1+Math.floor(Math.abs(s)*7919)%2147483646});
   normalAt(st.p.x,st.p.z,st.nVis);trail.breakStroke();
 }
 function crash(reason){
@@ -641,43 +659,65 @@ function groundStep(dt,inp){
   if(!st.guard){if(slip>GUARD_SLIP&&Math.abs(vl0)>GUARD_V)st.guard=true;}
   else if(slip<GUARD_OFF||Math.abs(vl0)<.6)st.guard=false;
 
+  // 推坡：按下时在哪个刃就用哪个刃推（T=f(yaw-π/2)：后刃推坡 T 朝行进方向，yaw=au+π/2；前刃 yaw=au-π/2）
+  const au=Math.atan2(U0.x,U0.z);
+  if(inp.brake&&!st.braking){
+    const c1=wrapPi(au+Math.PI/2-st.yaw),c2=wrapPi(au-Math.PI/2-st.yaw);
+    let e=Math.abs(st.edge)>3*DEG?Math.sign(st.edge):(Math.abs(c1)<Math.abs(c2)?-1:1);
+    if(Math.sign(vl0)===e&&Math.abs(vl0)>.8)e=-e; // 这条刃现在在滑动的下坡一侧，推下去会卡刃，改用另一条
+    st.brakeEdge=e;st.brakeFwd=fwd;
+  }
+  if(!inp.brake&&st.braking)st.unbrake=BRAKE_BACK; // 松手回正
+  st.braking=inp.brake;
+  if(st.unbrake>0){st.unbrake-=dt;if(Math.abs(inp.steer)>.3||butter||inp.brake)st.unbrake=0;}
+  const back=st.unbrake>0;
+
   // 目标立刃角与偏航
   let eT=0,yawRate=0,sideSlip=false;
   if(inp.brake){
-    const au=Math.atan2(U0.x,U0.z);
-    const c1=wrapPi(au+Math.PI/2-st.yaw),c2=wrapPi(au-Math.PI/2-st.yaw);
-    const dy=Math.abs(c1)<Math.abs(c2)?c1:c2;
+    const dy=wrapPi(au+st.brakeEdge*-Math.PI/2-st.yaw);
     yawRate=clamp(dy*7,-4.5,4.5);
-    eT=(vl0>=0?-1:1)*(17+11*Math.abs(inp.steer))*DEG; // 上坡刃
+    eT=st.brakeEdge*(17+11*Math.abs(inp.steer))*DEG;
+  }else if(back){
+    // 松开推坡：板转回推坡前的朝向（速度太低时转向滚落线），刃保持在推坡那一侧（一直是上坡刃），越接近对齐越平
+    const head=sp>2?au:Math.atan2(n.x,n.z),dy=wrapPi(head+(st.brakeFwd>0?0:Math.PI)-st.yaw);
+    if(Math.abs(dy)<GUARD_OFF)st.unbrake=0;
+    yawRate=clamp(dy*5,-4,4);
+    eT=st.brakeEdge*Math.max(6*DEG,25*DEG*Math.min(1,Math.abs(dy)/(Math.PI/2)));
   }else if(butter){
     eT=0;
     yawRate=st.charging?0:inp.steer*5.2; // 蓄力时左右拨只预拧上身，板不转
   }else{
     eT=inp.steerSm*sideSign*EMAX;
-    if(st.guard&&!(Math.sign(eT)===up&&Math.abs(eT)>4*DEG)){ // 想立的是下坡刃或者放平：改成上坡刃
+    const onUp=Math.sign(eT)===up&&Math.abs(eT)>4*DEG;
+    if(st.guard&&diff.guard&&!onUp){ // 想立的是下坡刃或者放平：改成上坡刃
       if(slip<=SIDE_SLIP)eT=up*Math.max(Math.abs(eT),30*DEG);                            // 角度差一点：顺势用上坡刃刻过去
       else{eT=up*clamp(8+2.5*Math.abs(vl0),8,24)*DEG;sideSlip=true;}                   // 横着滑：上坡刃推坡
-    }
+    }else if(st.guard&&!diff.guard&&onUp&&slip>SIDE_SLIP)sideSlip=true;                // 硬核：不替玩家换刃，自己立了上坡刃才算推坡
+    if(diff.wobble)eT=clamp(eT+st.bal*BAL_EDGE*(1-smooth(.2,.7,Math.abs(inp.steerSm))),-EMAX,EMAX); // 平板时重心晃到哪边就压到哪边的刃
   }
+  const loose=!inp.brake&&!back&&!butter;
+  if(diff.wobble)balance(n,sp,dt,loose);
   st.edge+=(eT-st.edge)*Math.min(1,dt*7);
   const absE=Math.abs(st.edge);
 
   // 上坡刃在侧滑角不太大时就能咬住；下坡刃只有板和速度几乎对齐时才咬得住（正常换刃起弯）
   const correctSide=Math.abs(vl0)<.8||Math.sign(st.edge)===up||slip<GUARD_SLIP;
-  const grip=!butter&&!inp.brake&&!sideSlip&&absE>9*DEG&&slip<(10*DEG+absE*.6)&&correctSide;
+  const grip=!butter&&!inp.brake&&!back&&!sideSlip&&absE>9*DEG&&slip<(10*DEG+absE*.6)&&correctSide;
   st.grip=grip;
   if(grip){
     // 转弯半径：侧切半径 × cos(立刃角)，并受立刃角能承受的向心加速度限制；粉雪里板会漂，弯更大
     const R=Math.max(RSC*Math.cos(absE)*(1+.5*pw),(sp*sp)/(G*Math.tan(absE)*1.1));
     yawRate+=-Math.sign(st.edge)*vf0/R*smooth(9*DEG,16*DEG,absE);
-  }else if(!inp.brake&&!butter){
-    yawRate+=inp.steer*fwd*2.4*(1-.6*smooth(2,14,sp))*(st.guard&&slip<=SIDE_SLIP&&Math.sign(st.edge)===up?.25:1); // 角度差一点、正在顺势立上坡刃时少拧板，让刃先咬住
+  }else if(!inp.brake&&!butter&&!back){
+    yawRate+=inp.steer*fwd*2.4*(1-.6*smooth(2,14,sp))*(st.guard&&diff.guard&&slip<=SIDE_SLIP&&Math.sign(st.edge)===up?.25:1); // 角度差一点、正在顺势立上坡刃时少拧板，让刃先咬住
     if(sp>2.5){ // 板自然回正到行进方向（正脚或反脚）
-      const au=Math.atan2(U0.x,U0.z);const d1=wrapPi(au-st.yaw),d2=wrapPi(au+Math.PI-st.yaw);const d=Math.abs(d1)<Math.abs(d2)?d1:d2;
-      yawRate+=d*2.6*(1-Math.abs(inp.steer)*.7)*(sideSlip?0:1); // 横着推坡时板不会自己转回来，松手就一直推坡到停
+      const d1=wrapPi(au-st.yaw),d2=wrapPi(au+Math.PI-st.yaw);const d=Math.abs(d1)<Math.abs(d2)?d1:d2;
+      yawRate+=d*diff.realign*(1-Math.abs(inp.steer)*.7)*(sideSlip?0:1); // 自动守刃横着推坡时板不会自己转回来，一直推坡到停（按 Shift 推坡松手才回正）
     }
   }
   if(sp<3&&!butter&&!inp.brake)yawRate+=inp.steer*fwd*1.2;
+  if(diff.wobble&&loose)yawRate+=deflect(F0,T0,sp);
 
   const dyaw=yawRate*dt;
   if(butter&&dyaw!==0){const sg=Math.sign(st.press);TIP.copy(st.p).addScaledVector(F0,.7*sg);st.yaw+=dyaw;basis(st.yaw,n,F0,T0);st.p.copy(TIP).addScaledVector(F0,-.7*sg);}
@@ -692,10 +732,12 @@ function groundStep(dt,inp){
   let vf=st.v.dot(F0),vl=st.v.dot(T0);const vn=st.v.dot(n),gn=G*n.y;
 
   // 卡刃：横滑得很快，而滑动方向那一侧的刃（下坡刃）已经大角度压进雪里
-  if(!butter&&absE>CATCH_E&&Math.sign(st.edge)===Math.sign(vl)&&Math.abs(vl)>CATCH_V&&slip>CATCH_SLIP){crash('卡刃：横滑时下坡刃压进了雪里');return;}
+  if(!butter&&absE>diff.catchE&&Math.sign(st.edge)===Math.sign(vl)&&Math.abs(vl)>diff.catchV&&slip>diff.catchSlip){crash('卡刃：横滑时下坡刃压进了雪里');return;}
 
   if(grip){
-    const spd=Math.hypot(vf,vl);vl*=Math.exp(-28*dt);vf=(vf>=0?1:-1)*Math.sqrt(Math.max(0,spd*spd-vl*vl));
+    const spd=Math.hypot(vf,vl);let nvl=vl*Math.exp(-28*dt);
+    if(diff.wobble){const cap=(G*n.y*Math.tan(absE)*1.3+1.5)*dt;if(Math.abs(vl-nvl)>cap)nvl=vl-Math.sign(vl)*cap;} // 硬核：刃能吃住的横向力有限，被拧得太快就开始侧滑
+    vl=nvl;vf=(vf>=0?1:-1)*Math.sqrt(Math.max(0,spd*spd-vl*vl));
     st.mode='carve';
   }else{
     let mu=butter?.24:.05+1.45*Math.sin(absE);if(inp.brake)mu+=.12;if(inp.brake||sideSlip)mu+=.6*smooth(.94,.8,n.y); // 越陡刃咬得越深，陡坡上也能推坡控速
@@ -734,6 +776,23 @@ function groundStep(dt,inp){
     else beginAir('Air',fwd);
   }else{st.p.y=h;st.v.addScaledVector(N1,-vout);}
 }
+// 硬核平衡：重心偏角 bal 是带骑手反射的倒立摆。地面横向一翻，身体有惯性，重心就相对板偏过去；速度越快板越抖。
+// active=false（推坡、回正、平花）时骑手压着刃，平衡被稳住
+function balance(n,sp,dt,active){
+  // 只算雪面本身起伏带来的横向翻转（同一个朝向下比较前后两帧的法线），转弯改变朝向不算
+  const th=st.yaw-Math.PI/2,s=Math.sin(th),c=Math.cos(th);
+  if(st.roll&&active)st.bal-=BAL_ROLL*(Math.asin(clamp(n.x*s+n.z*c,-1,1))-Math.asin(clamp(st.roll.x*s+st.roll.z*c,-1,1))); // 腿能吸收一部分
+  (st.roll||(st.roll=new V3())).copy(n);
+  const k=active?BAL_K:BAL_K*4;
+  st.balV+=((G/BAL_L)*st.bal-k*G*st.bal-BAL_C*st.balV)*dt+(rand()-.5)*BAL_NOISE*Math.min(sp/10,2)*Math.sqrt(dt);
+  st.bal=clamp(st.bal+st.balV*dt,-.6,.6);
+}
+// 硬核：板头、板尾压在横向坡度不同的雪面上（蘑菇侧面、凸包），法向力的横向分量把板拧偏
+function deflect(F,T,sp){
+  TIP.copy(st.p).addScaledVector(F,.7);const a=normalAt(TIP.x,TIP.z,N2).dot(T);
+  TIP.copy(st.p).addScaledVector(F,-.7);const b=normalAt(TIP.x,TIP.z,N2).dot(T);
+  return -BAL_DEFLECT*(a-b)*Math.min(sp,15);
+}
 function pop(n,fwd,strength){
   st.v.addScaledVector(n,strength);
   beginAir(st.noseLoad?'Nollie':'Ollie',fwd);
@@ -744,6 +803,7 @@ function pop(n,fwd,strength){
 }
 function beginAir(type,fwd){
   st.air=true;st.airT=0;st.airYaw=0;st.grabName=null;st.grabT=0;
+  st.braking=false;st.unbrake=0;st.roll=null;
   st.take={type,sw:fwd<0,fwd};
   if(st.butterT>0)finishButter();
   finishDeep();
@@ -785,16 +845,17 @@ function land(h,inp){
   if(real){
     if(inp.grab)return crash('落地时还抓着板');
     if(mis>70*DEG||(mis>40*DEG&&spT*Math.sin(mis)>LAND_LAT))return crash('卡刃：板横着落地（差 '+Math.round(mis/DEG)+'°）'); // 侧向速度小时横着落地只算不稳，落地后自动守刃推坡
-    if(vn<-(12.5+PW_LAND*pw))return crash('落地太重，冲击 '+(-vn).toFixed(1)+' m/s');
   }
+  const heavy=real&&vn<-(12.5+PW_LAND*pw);
+  if(heavy&&diff.heavy)return crash('落地太重，冲击 '+(-vn).toFixed(1)+' m/s'); // 轻松模式只算落地不稳
   const absorb=clamp(-vn*.025,0,.3);st.v.copy(VT).multiplyScalar(1-absorb);
-  const sketchy=real&&mis>18*DEG;if(sketchy)st.v.multiplyScalar(.8);
+  const sketchy=real&&(mis>18*DEG||heavy);if(sketchy)st.v.multiplyScalar(.8);
   burst(st.p,real?18:5,real?2.4:1);
   emit({type:'land',impact:-vn,real,sketchy,airT:st.airT});
-  if(real)scoreAir(sketchy,spin);
+  if(real)scoreAir(sketchy,heavy);
   st.grabName=null;st.grabT=0;
 }
-function scoreAir(sketchy){
+function scoreAir(sketchy,heavy){
   const deg=Math.round(Math.abs(st.airYaw)/Math.PI)*180;
   const fs=Math.sign(st.airYaw)===st.take.fwd;
   const parts=[];if(st.take.sw)parts.push('Switch');
@@ -803,7 +864,7 @@ function scoreAir(sketchy){
   if(st.grabName)parts.push(st.grabName);
   if(parts.length===0||(parts.length===1&&parts[0]==='Switch'))parts.push(st.airT>.7?'Straight Air':'Hop');
   const pts=50+deg*1.15+st.airT*90+(st.grabName?180:0);
-  const sub=[];if(deg>=180)sub.push(fs?'正转':'背转');sub.push('滞空 '+st.airT.toFixed(2)+' s');if(sketchy)sub.push('落地不稳');
+  const sub=[];if(deg>=180)sub.push(fs?'正转':'背转');sub.push('滞空 '+st.airT.toFixed(2)+' s');if(sketchy)sub.push(heavy?'落地太重':'落地不稳');
   award(parts.join(' '),pts,sub.join(' · '),sketchy);
 }
 function crashStep(dt){
@@ -921,7 +982,7 @@ function updateHud(dt){
   hud.pDot.style.background=P?P.color:'#ff7a1a';
   const zt=sf.zone==='groomed'?'压雪道':z[0];if(hud.zone.textContent!==zt)hud.zone.textContent=zt;
   hud.alt.textContent='海拔 '+Math.round(ALT0+st.p.y-H_FIN)+' m';
-  hud.score.textContent=score.total.toLocaleString();hud.best.textContent='最佳 '+Math.max(score.best,score.total).toLocaleString();
+  hud.score.textContent=score.total.toLocaleString();hud.best.textContent=(diff.key==='hard'?'硬核最佳 ':'最佳 ')+Math.max(score.best,score.total).toLocaleString();
   const s=clamp(st.s,0,FINISH);hud.prog.style.width=(s/FINISH*100)+'%';
   const next=!sf.trunk&&sf.k===3?KICK.find(k=>k.s>s+2):null;
   hud.dist.textContent=next?`下个${next.big?'大':''}跳台 ${Math.round(next.s-s)} m`:`距山脚 ${Math.round(FINISH-s)} m`;
@@ -1011,11 +1072,11 @@ function startRun(){
 function finishRun(){
   st.done=true;running=false;
   emit({type:'finish',score:score.total});
-  if(score.total>score.best){score.best=score.total;try{localStorage.setItem('edgeline-best',String(score.best));}catch(e){}}
+  if(score.total>score.best){score.best=score.total;try{localStorage.setItem(bestKey(),String(score.best));}catch(e){}}
   $('endScore').textContent=score.total.toLocaleString();$('endBest').textContent=score.best.toLocaleString();
   const t=Math.round(st.runTime);$('endTime').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
   const vis=[...st.visited].map(i=>PISTES[i].name),left=PISTES.filter((P,i)=>!st.visited.has(i));
-  $('endNote').textContent=(vis.length?'这趟滑了 '+vis.join('、')+'。':'')+(left.length?'下次试试 '+left[0].key+' '+left[0].name+'：在 500 m 分岔口往'+(left[0].lane<0?'左':'右')+'拐。':'四条雪道都滑过了，试试在大跳台上加抓板和转体。');
+  $('endNote').textContent=diff.name+'模式。'+(vis.length?'这趟滑了 '+vis.join('、')+'。':'')+(left.length?'下次试试 '+left[0].key+' '+left[0].name+'：在 500 m 分岔口往'+(left[0].lane<0?'左':'右')+'拐。':'四条雪道都滑过了，试试在大跳台上加抓板和转体。');
   cardStart.hidden=true;cardEnd.hidden=false;ov.hidden=false;
 }
 $('goBtn').addEventListener('click',startRun);
@@ -1031,6 +1092,12 @@ document.querySelectorAll('#pick button').forEach(b=>b.addEventListener('click',
 const riderBtns=(sel,attr,k)=>{const bs=document.querySelectorAll(sel);bs.forEach(b=>{b.classList.toggle('on',b.dataset[attr]===rider[k]);
   b.addEventListener('click',()=>{setRider({[k]:b.dataset[attr]});bs.forEach(o=>o.classList.toggle('on',o===b));});});};
 riderBtns('#gender button','g','gender');riderBtns('#colors button','c','color');
+// 难度：轻松 / 硬核（记住选择，最佳分各记各的）
+const DIFF_NOTE={easy:'自动守刃，落地太重只算不稳',hard:'不自动守刃，平板会晃，卡刃更严格，落地太重会摔'};
+const diffBtns=document.querySelectorAll('#diff button');
+function syncDiff(){diffBtns.forEach(b=>b.classList.toggle('on',b.dataset.d===diff.key));const n=$('diffNote');if(n)n.textContent=DIFF_NOTE[diff.key];}
+diffBtns.forEach(b=>b.addEventListener('click',()=>{if(b.dataset.d===diff.key)return;setDifficulty(b.dataset.d);syncDiff();resetRun();$('goBtn').textContent='开始滑行';})); // 换难度就重新开一趟，得分不跨模式
+syncDiff();
 for(const [id,k] of[['optMusic','music'],['optSfx','sfx']]){const el=$(id);if(!el)continue;if(SND.state[k]===false)el.checked=false;el.addEventListener('change',()=>{SND.unlock();SND.set(k,el.checked);});}
 syncMute();
 
@@ -1056,5 +1123,5 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 document.addEventListener('visibilitychange',()=>{last=performance.now();});
-window.__edgeline={st,step,H,Hbase,placeAt,KICK,BIG,PISTES,FINISH,laneAt,laneD,halfAt,pisteX:laneAt,surfaceAt,nearestPiste,center,fx,drainFx,score,treeGrid,TREE_CELL,MOG0,MOG1,snapCamera,rig,rider,setRider,RIDER_COLORS};
+window.__edgeline={st,step,H,Hbase,placeAt,KICK,BIG,PISTES,FINISH,laneAt,laneD,halfAt,pisteX:laneAt,surfaceAt,nearestPiste,center,fx,drainFx,score,treeGrid,TREE_CELL,MOG0,MOG1,snapCamera,rig,rider,setRider,RIDER_COLORS,DIFF,setDifficulty,get diff(){return diff;}};
 })();
